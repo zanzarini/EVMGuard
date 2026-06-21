@@ -32,3 +32,11 @@
 - Release binaries for Linux, Windows, and macOS.
 - Expanded transaction risk rules and configurable high-risk recipients.
 - Contribution templates for feature requests and pull requests.
+
+## v1.2.0
+
+- ERC-20 allowance increase, EIP-2612 permit, transfer, and transferFrom detection.
+- Uniswap Permit2 approval, permit, and transfer detection.
+- Contract creation findings in execution traces.
+- Serializer-backed JSON and SARIF rendering.
+- Proxy classification and configuration error test coverage.

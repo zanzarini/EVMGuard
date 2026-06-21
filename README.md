@@ -4,7 +4,7 @@ EVMGuard is an open-source EVM transaction inspection tool for identifying secur
 
 ## Status
 
-Version 1.1.0 adds local EVM integration testing, coverage reporting, release binaries, and expanded transaction risk analysis to the stable core.
+Version 1.2.0 expands calldata risk analysis with ERC-20 allowance, EIP-2612, transfer, and Uniswap Permit2 detection, adds contract-creation trace findings, and renders reports through a serializer.
 
 ## Scope
 
