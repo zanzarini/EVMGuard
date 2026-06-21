@@ -1,0 +1,52 @@
+name: Release binaries
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag that will receive the binaries.
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset: evmguard-linux
+            extension: ""
+          - os: windows-latest
+            asset: evmguard-windows.exe
+            extension: .exe
+          - os: macos-latest
+            asset: evmguard-macos
+            extension: ""
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build release binary
+        run: cargo build --release -p evmguard-cli
+      - name: Package binary
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/release/evmguard${{ matrix.extension }}" "dist/${{ matrix.asset }}"
+      - name: Upload release binary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "dist/${{ matrix.asset }}" --clobber
