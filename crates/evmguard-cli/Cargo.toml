@@ -15,3 +15,4 @@ path = "src/main.rs"
 evmguard-analyzer = { path = "../evmguard-analyzer" }
 evmguard-core = { path = "../evmguard-core" }
 evmguard-report = { path = "../evmguard-report" }
+evmguard-rpc = { path = "../evmguard-rpc" }

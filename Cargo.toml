@@ -4,6 +4,7 @@ members = [
     "crates/evmguard-cli",
     "crates/evmguard-core",
     "crates/evmguard-report",
+    "crates/evmguard-rpc",
 ]
 resolver = "2"
 

@@ -14,13 +14,14 @@
 | `evmguard-core` | Transaction, finding, severity, and report domain types. |
 | `evmguard-analyzer` | Static inspection rules. |
 | `evmguard-report` | Text and JSON output rendering. |
+| `evmguard-rpc` | HTTP JSON-RPC transport, chain validation, and gas estimation. |
 | `evmguard-cli` | Command-line argument parsing and orchestration. |
 
 ## Planned execution pipeline
 
 ```text
 Transaction request
-  -> RPC or local fork executor
+  -> RPC preflight or local fork executor
   -> trace normalizer
   -> analyzer rules
   -> text, JSON, and SARIF reports

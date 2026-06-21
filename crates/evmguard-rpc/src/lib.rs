@@ -1,0 +1,338 @@
+use std::{error::Error, fmt};
+
+use evmguard_core::TransactionRequest;
+use reqwest::{blocking::Client, StatusCode, Url};
+use serde_json::{json, Value};
+
+#[derive(Debug)]
+pub enum RpcError {
+    InvalidEndpoint(String),
+    InvalidTransaction(String),
+    Transport(reqwest::Error),
+    Http(StatusCode),
+    Remote { code: i64, message: String },
+    InvalidResponse(String),
+}
+
+impl fmt::Display for RpcError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidEndpoint(message) => write!(formatter, "Invalid RPC endpoint: {message}"),
+            Self::InvalidTransaction(message) => {
+                write!(formatter, "Invalid transaction: {message}")
+            }
+            Self::Transport(error) => write!(formatter, "RPC transport error: {error}"),
+            Self::Http(status) => write!(formatter, "RPC endpoint returned HTTP status {status}"),
+            Self::Remote { code, message } => {
+                write!(formatter, "RPC endpoint returned error {code}: {message}")
+            }
+            Self::InvalidResponse(message) => write!(formatter, "Invalid RPC response: {message}"),
+        }
+    }
+}
+
+impl Error for RpcError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Transport(error) => Some(error),
+            _ => None,
+        }
+    }
+}
+
+pub struct RpcClient {
+    client: Client,
+    endpoint: Url,
+}
+
+impl RpcClient {
+    pub fn new(endpoint: &str) -> Result<Self, RpcError> {
+        let endpoint =
+            Url::parse(endpoint).map_err(|error| RpcError::InvalidEndpoint(error.to_string()))?;
+
+        if endpoint.scheme() != "http" && endpoint.scheme() != "https" {
+            return Err(RpcError::InvalidEndpoint(
+                "endpoint must use HTTP or HTTPS".to_owned(),
+            ));
+        }
+
+        let client = Client::builder().build().map_err(RpcError::Transport)?;
+
+        Ok(Self { client, endpoint })
+    }
+
+    pub fn chain_id(&self) -> Result<u64, RpcError> {
+        let result = self.call("eth_chainId", json!([]))?;
+        parse_quantity(result.as_str(), "eth_chainId")
+    }
+
+    pub fn estimate_gas(&self, transaction: &TransactionRequest) -> Result<u64, RpcError> {
+        let result = self.call("eth_estimateGas", json!([transaction_object(transaction)?]))?;
+
+        parse_quantity(result.as_str(), "eth_estimateGas")
+    }
+
+    fn call(&self, method: &str, params: Value) -> Result<Value, RpcError> {
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": params,
+        });
+        let response = self
+            .client
+            .post(self.endpoint.clone())
+            .json(&request)
+            .send()
+            .map_err(RpcError::Transport)?;
+        let status = response.status();
+
+        if !status.is_success() {
+            return Err(RpcError::Http(status));
+        }
+
+        let response: Value = response.json().map_err(RpcError::Transport)?;
+
+        if let Some(error) = response.get("error") {
+            let code = error
+                .get("code")
+                .and_then(Value::as_i64)
+                .unwrap_or_default();
+            let message = error
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("Unknown JSON-RPC error")
+                .to_owned();
+
+            return Err(RpcError::Remote { code, message });
+        }
+
+        response
+            .get("result")
+            .cloned()
+            .ok_or_else(|| RpcError::InvalidResponse("missing result field".to_owned()))
+    }
+}
+
+fn transaction_object(transaction: &TransactionRequest) -> Result<Value, RpcError> {
+    if !is_evm_address(&transaction.from) {
+        return Err(RpcError::InvalidTransaction(
+            "from must be a 20-byte EVM address".to_owned(),
+        ));
+    }
+
+    if !is_evm_address(&transaction.to) {
+        return Err(RpcError::InvalidTransaction(
+            "to must be a 20-byte EVM address".to_owned(),
+        ));
+    }
+
+    if !is_hex_data(&transaction.data) {
+        return Err(RpcError::InvalidTransaction(
+            "data must be even-length hexadecimal data prefixed with 0x".to_owned(),
+        ));
+    }
+
+    Ok(json!({
+        "from": transaction.from,
+        "to": transaction.to,
+        "data": transaction.data,
+        "value": normalize_value(&transaction.value)?,
+    }))
+}
+
+fn is_evm_address(value: &str) -> bool {
+    value.len() == 42
+        && value.starts_with("0x")
+        && value[2..]
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+}
+
+fn is_hex_data(value: &str) -> bool {
+    value.starts_with("0x")
+        && (value.len() - 2) % 2 == 0
+        && value[2..]
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+}
+
+fn normalize_value(value: &str) -> Result<String, RpcError> {
+    if value == "0" {
+        return Ok("0x0".to_owned());
+    }
+
+    let quantity = value.strip_prefix("0x").ok_or_else(|| {
+        RpcError::InvalidTransaction("value must be 0 or an RPC hex quantity".to_owned())
+    })?;
+
+    if quantity.is_empty()
+        || !quantity
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    {
+        return Err(RpcError::InvalidTransaction(
+            "value must be 0 or an RPC hex quantity".to_owned(),
+        ));
+    }
+
+    let normalized = quantity.trim_start_matches('0');
+    if normalized.is_empty() {
+        Ok("0x0".to_owned())
+    } else {
+        Ok(format!("0x{normalized}"))
+    }
+}
+
+fn parse_quantity(value: Option<&str>, field: &str) -> Result<u64, RpcError> {
+    let value = value.ok_or_else(|| {
+        RpcError::InvalidResponse(format!("{field} result must be a hexadecimal quantity"))
+    })?;
+    let quantity = value.strip_prefix("0x").ok_or_else(|| {
+        RpcError::InvalidResponse(format!("{field} result must be a hexadecimal quantity"))
+    })?;
+
+    if quantity.is_empty() {
+        return Err(RpcError::InvalidResponse(format!(
+            "{field} result must not be empty"
+        )));
+    }
+
+    u64::from_str_radix(quantity, 16).map_err(|_| {
+        RpcError::InvalidResponse(format!("{field} result exceeds the supported range"))
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+    };
+
+    use super::{RpcClient, RpcError};
+    use evmguard_core::TransactionRequest;
+    use serde_json::Value;
+
+    fn transaction() -> TransactionRequest {
+        TransactionRequest {
+            chain_id: 8453,
+            from: "0x1111111111111111111111111111111111111111".to_owned(),
+            to: "0x2222222222222222222222222222222222222222".to_owned(),
+            data: "0x095ea7b3".to_owned(),
+            value: "0".to_owned(),
+        }
+    }
+
+    fn test_server(response: &str) -> (String, thread::JoinHandle<Value>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+        let address = listener.local_addr().expect("read local address");
+        let response = response.to_owned();
+        let handle = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept request");
+            let mut request = Vec::new();
+            let mut buffer = [0_u8; 1024];
+
+            let header_end = loop {
+                let bytes_read = stream.read(&mut buffer).expect("read request");
+                request.extend_from_slice(&buffer[..bytes_read]);
+
+                if let Some(index) = request.windows(4).position(|window| window == b"\r\n\r\n") {
+                    break index + 4;
+                }
+            };
+
+            let headers =
+                String::from_utf8(request[..header_end].to_vec()).expect("decode headers");
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    name.eq_ignore_ascii_case("content-length")
+                        .then(|| value.trim().parse::<usize>().ok())
+                        .flatten()
+                })
+                .expect("read content length");
+
+            while request.len() < header_end + content_length {
+                let bytes_read = stream.read(&mut buffer).expect("read request body");
+                request.extend_from_slice(&buffer[..bytes_read]);
+            }
+
+            let body: Value =
+                serde_json::from_slice(&request[header_end..header_end + content_length])
+                    .expect("parse request body");
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                response.len(),
+                response,
+            );
+
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
+
+            body
+        });
+
+        (format!("http://{address}"), handle)
+    }
+
+    #[test]
+    fn reads_chain_id_from_json_rpc() {
+        let (endpoint, handle) = test_server(r#"{"jsonrpc":"2.0","id":1,"result":"0x2105"}"#);
+        let client = RpcClient::new(&endpoint).expect("create client");
+
+        let chain_id = client.chain_id().expect("read chain ID");
+        let request = handle.join().expect("join test server");
+
+        assert_eq!(chain_id, 8453);
+        assert_eq!(request["method"], "eth_chainId");
+    }
+
+    #[test]
+    fn estimates_gas_with_normalized_value() {
+        let (endpoint, handle) = test_server(r#"{"jsonrpc":"2.0","id":1,"result":"0x5208"}"#);
+        let client = RpcClient::new(&endpoint).expect("create client");
+
+        let estimate = client.estimate_gas(&transaction()).expect("estimate gas");
+        let request = handle.join().expect("join test server");
+
+        assert_eq!(estimate, 21_000);
+        assert_eq!(request["method"], "eth_estimateGas");
+        assert_eq!(request["params"][0]["value"], "0x0");
+    }
+
+    #[test]
+    fn surfaces_json_rpc_errors() {
+        let (endpoint, handle) = test_server(
+            r#"{"jsonrpc":"2.0","id":1,"error":{"code":3,"message":"execution reverted"}}"#,
+        );
+        let client = RpcClient::new(&endpoint).expect("create client");
+
+        let error = client.chain_id().expect_err("expect RPC error");
+        handle.join().expect("join test server");
+
+        assert!(matches!(
+            error,
+            RpcError::Remote {
+                code: 3,
+                message
+            } if message == "execution reverted"
+        ));
+    }
+
+    #[test]
+    fn rejects_invalid_transaction_addresses() {
+        let client = RpcClient::new("http://127.0.0.1:1").expect("create client");
+        let mut transaction = transaction();
+        transaction.from = "invalid".to_owned();
+
+        let error = client
+            .estimate_gas(&transaction)
+            .expect_err("reject invalid address");
+
+        assert!(matches!(error, RpcError::InvalidTransaction(_)));
+    }
+}
