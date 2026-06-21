@@ -9,3 +9,6 @@ description = "Text and JSON report rendering for EVMGuard."
 
 [dependencies]
 evmguard-core = { path = "../evmguard-core" }
+
+[dev-dependencies]
+serde_json = "1.0.150"
