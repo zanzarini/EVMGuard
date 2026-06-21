@@ -11,10 +11,10 @@
 
 | Crate | Responsibility |
 | --- | --- |
-| `evmguard-core` | Transaction, call trace, finding, severity, and report domain types. |
+| `evmguard-core` | Transaction, proxy, call trace, finding, severity, and report domain types. |
 | `evmguard-analyzer` | Static inspection rules. |
 | `evmguard-report` | Text and JSON output rendering. |
-| `evmguard-rpc` | HTTP JSON-RPC transport, preflight, and call trace normalization. |
+| `evmguard-rpc` | HTTP JSON-RPC transport, preflight, call trace normalization, and proxy storage inspection. |
 | `evmguard-cli` | Command-line argument parsing and orchestration. |
 
 ## Planned execution pipeline
@@ -30,6 +30,6 @@ Transaction request
 ## Planned extension points
 
 - Local fork execution through Anvil.
-- Trace rules for token transfers and proxy behavior.
+- Trace rules for token transfers.
 - SARIF reporting for CI integrations.
 - Rule configuration and external rule packs.

@@ -1,4 +1,4 @@
-use evmguard_core::{AnalysisReport, Finding};
+use evmguard_core::{AnalysisReport, Finding, ProxyReport};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputFormat {
@@ -20,6 +20,13 @@ pub fn render(report: &AnalysisReport, format: OutputFormat) -> String {
     match format {
         OutputFormat::Text => render_text(report),
         OutputFormat::Json => render_json(report),
+    }
+}
+
+pub fn render_proxy(report: &ProxyReport, format: OutputFormat) -> String {
+    match format {
+        OutputFormat::Text => render_proxy_text(report),
+        OutputFormat::Json => render_proxy_json(report),
     }
 }
 
@@ -75,6 +82,65 @@ fn render_json(report: &AnalysisReport) -> String {
         preflight,
         findings,
     )
+}
+
+fn render_proxy_text(report: &ProxyReport) -> String {
+    let kind = report
+        .proxy
+        .kind
+        .as_ref()
+        .map(|kind| kind.as_str())
+        .unwrap_or("None");
+    let mut output = format!(
+        "EVMGuard proxy inspection\nAddress: {}\nKind: {}\nImplementation: {}\nAdmin: {}\nBeacon: {}\nFindings:\n",
+        report.proxy.address,
+        kind,
+        report.proxy.implementation.as_deref().unwrap_or("None"),
+        report.proxy.admin.as_deref().unwrap_or("None"),
+        report.proxy.beacon.as_deref().unwrap_or("None"),
+    );
+
+    for finding in &report.findings {
+        output.push_str(&format!(
+            "  [{}] {}: {}\n",
+            finding.severity.as_str(),
+            finding.rule_id,
+            finding.message,
+        ));
+    }
+
+    output
+}
+
+fn render_proxy_json(report: &ProxyReport) -> String {
+    let kind = report
+        .proxy
+        .kind
+        .as_ref()
+        .map(|kind| format!("\"{}\"", kind.as_str()))
+        .unwrap_or_else(|| "null".to_owned());
+    let findings = report
+        .findings
+        .iter()
+        .map(render_finding_json)
+        .collect::<Vec<_>>()
+        .join(",\n    ");
+
+    format!(
+        "{{\n  \"proxy\": {{\n    \"address\": \"{}\",\n    \"kind\": {},\n    \"implementation\": {},\n    \"admin\": {},\n    \"beacon\": {}\n  }},\n  \"findings\": [\n    {}\n  ]\n}}\n",
+        escape_json(&report.proxy.address),
+        kind,
+        optional_json_string(report.proxy.implementation.as_deref()),
+        optional_json_string(report.proxy.admin.as_deref()),
+        optional_json_string(report.proxy.beacon.as_deref()),
+        findings,
+    )
+}
+
+fn optional_json_string(value: Option<&str>) -> String {
+    value
+        .map(|value| format!("\"{}\"", escape_json(value)))
+        .unwrap_or_else(|| "null".to_owned())
 }
 
 fn render_preflight_json(preflight: &evmguard_core::PreflightResult) -> String {

@@ -1,18 +1,26 @@
 use std::{env, process};
 
-use evmguard_analyzer::{inspect, inspect_trace};
-use evmguard_core::{PreflightResult, TransactionRequest};
-use evmguard_report::{render, OutputFormat};
+use evmguard_analyzer::{inspect, inspect_proxy, inspect_trace};
+use evmguard_core::{PreflightResult, ProxyReport, TransactionRequest};
+use evmguard_report::{render, render_proxy, OutputFormat};
 use evmguard_rpc::RpcClient;
 
 const INSPECT_USAGE: &str = "Usage:\n  evmguard inspect --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json]";
 const PREFLIGHT_USAGE: &str = "Usage:\n  evmguard preflight --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json]";
 const TRACE_USAGE: &str = "Usage:\n  evmguard trace --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json]";
+const PROXY_USAGE: &str = "Usage:\n  evmguard proxy --rpc-url <url> --chain-id <id> --address <address> [--format text|json]";
 
 struct ParsedArguments {
     transaction: TransactionRequest,
     format: OutputFormat,
     rpc_url: Option<String>,
+}
+
+struct ProxyArguments {
+    rpc_url: String,
+    chain_id: u64,
+    address: String,
+    format: OutputFormat,
 }
 
 fn main() {
@@ -30,10 +38,11 @@ fn run() -> Result<(), String> {
         "inspect" => inspect_command(arguments),
         "preflight" => preflight_command(arguments),
         "trace" => trace_command(arguments),
+        "proxy" => proxy_command(arguments),
         "help" | "--help" | "-h" => {
             println!(
-                "{}\n\n{}\n\n{}",
-                INSPECT_USAGE, PREFLIGHT_USAGE, TRACE_USAGE
+                "{}\n\n{}\n\n{}\n\n{}",
+                INSPECT_USAGE, PREFLIGHT_USAGE, TRACE_USAGE, PROXY_USAGE
             );
             Ok(())
         }
@@ -104,6 +113,30 @@ fn trace_command(arguments: impl Iterator<Item = String>) -> Result<(), String> 
     Ok(())
 }
 
+fn proxy_command(arguments: impl Iterator<Item = String>) -> Result<(), String> {
+    let parsed = parse_proxy_arguments(arguments)?;
+    let client = RpcClient::new(&parsed.rpc_url).map_err(|error| error.to_string())?;
+    let remote_chain_id = client.chain_id().map_err(|error| error.to_string())?;
+
+    if remote_chain_id != parsed.chain_id {
+        return Err(format!(
+            "RPC endpoint chain ID {remote_chain_id} does not match requested chain ID {}.",
+            parsed.chain_id
+        ));
+    }
+
+    let proxy = client
+        .inspect_proxy(&parsed.address)
+        .map_err(|error| error.to_string())?;
+    let report = ProxyReport {
+        findings: inspect_proxy(&proxy),
+        proxy,
+    };
+
+    print!("{}", render_proxy(&report, parsed.format));
+    Ok(())
+}
+
 fn parse_arguments(
     mut arguments: impl Iterator<Item = String>,
     accepts_rpc_url: bool,
@@ -170,5 +203,50 @@ fn parse_arguments(
 }
 
 fn usage() -> String {
-    format!("{INSPECT_USAGE}\n\n{PREFLIGHT_USAGE}\n\n{TRACE_USAGE}")
+    format!("{INSPECT_USAGE}\n\n{PREFLIGHT_USAGE}\n\n{TRACE_USAGE}\n\n{PROXY_USAGE}")
+}
+
+fn parse_proxy_arguments(
+    mut arguments: impl Iterator<Item = String>,
+) -> Result<ProxyArguments, String> {
+    let mut rpc_url = None;
+    let mut chain_id = 0;
+    let mut address = None;
+    let mut format = OutputFormat::Text;
+
+    while let Some(argument) = arguments.next() {
+        let value = match argument.as_str() {
+            "--rpc-url" | "--chain-id" | "--address" | "--format" => arguments
+                .next()
+                .ok_or_else(|| format!("Missing value for {argument}.\n{PROXY_USAGE}"))?,
+            "--help" | "-h" => return Err(PROXY_USAGE.to_owned()),
+            _ => return Err(format!("Unknown argument: {argument}.\n{PROXY_USAGE}")),
+        };
+
+        match argument.as_str() {
+            "--rpc-url" => rpc_url = Some(value),
+            "--chain-id" => {
+                chain_id = value
+                    .parse::<u64>()
+                    .map_err(|_| "Chain ID must be an unsigned integer.".to_owned())?;
+            }
+            "--address" => address = Some(value),
+            "--format" => {
+                format = OutputFormat::parse(&value)
+                    .ok_or_else(|| "Format must be text or json.".to_owned())?;
+            }
+            _ => return Err(PROXY_USAGE.to_owned()),
+        }
+    }
+
+    if chain_id == 0 {
+        return Err("A non-zero --chain-id is required.".to_owned());
+    }
+
+    Ok(ProxyArguments {
+        rpc_url: rpc_url.ok_or_else(|| "--rpc-url is required.\n".to_owned() + PROXY_USAGE)?,
+        chain_id,
+        address: address.ok_or_else(|| "--address is required.\n".to_owned() + PROXY_USAGE)?,
+        format,
+    })
 }

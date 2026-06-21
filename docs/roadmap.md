@@ -12,7 +12,7 @@
 - HTTP JSON-RPC preflight with chain validation and gas estimation.
 - `debug_traceCall` integration with the `callTracer` tracer.
 - Delegate call, internal transfer, and execution error findings.
-- Proxy detection for EIP-1967 and UUPS contracts.
+- EIP-1967 and UUPS proxy inspection.
 
 ## v0.3.0
 
