@@ -1,0 +1,30 @@
+name: Feature request
+description: Propose a product or developer experience improvement.
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: Describe the current limitation and who it affects.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the expected behavior and any relevant interface changes.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe other approaches or explain why none are applicable.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Do not include private keys, access tokens, or sensitive production data.
