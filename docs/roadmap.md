@@ -16,8 +16,8 @@
 
 ## v0.3.0
 
-- SARIF output.
-- GitHub Action.
+- SARIF 2.1.0 output.
+- Manual GitHub Code Scanning workflow.
 - Rule configuration file.
 
 ## v1.0.0

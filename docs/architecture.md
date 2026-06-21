@@ -31,5 +31,4 @@ Transaction request
 
 - Local fork execution through Anvil.
 - Trace rules for token transfers.
-- SARIF reporting for CI integrations.
 - Rule configuration and external rule packs.

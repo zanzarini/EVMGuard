@@ -36,6 +36,8 @@ cargo run -p evmguard-cli -- inspect \
 
 Use `--format json` for automation-friendly output.
 
+Use `--format sarif` to generate a SARIF 2.1.0 report for security tooling.
+
 ## RPC preflight
 
 Run a preflight request against a standard EVM JSON-RPC endpoint before submitting a transaction:
@@ -81,6 +83,10 @@ evmguard proxy \
 ```
 
 The inspection reads implementation, administrator, and beacon storage slots. It identifies UUPS implementations through `proxiableUUID` when the contract exposes that method.
+
+## GitHub Code Scanning
+
+The `EVMGuard SARIF` workflow can be started manually from the Actions tab. It runs a transaction preflight with the supplied RPC endpoint and uploads the resulting SARIF report to GitHub Code Scanning.
 
 ## Roadmap
 

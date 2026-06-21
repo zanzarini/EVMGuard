@@ -1,0 +1,58 @@
+name: EVMGuard SARIF
+
+on:
+  workflow_dispatch:
+    inputs:
+      rpc_url:
+        description: EVM JSON-RPC endpoint
+        required: true
+        type: string
+      chain_id:
+        description: Expected EVM chain ID
+        required: true
+        type: string
+      from:
+        description: Transaction sender address
+        required: true
+        type: string
+      to:
+        description: Transaction target address
+        required: true
+        type: string
+      data:
+        description: Transaction calldata
+        required: true
+        type: string
+      value:
+        description: Transaction value as 0 or an RPC hex quantity
+        required: false
+        default: "0"
+        type: string
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  inspect:
+    name: Generate SARIF report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Generate SARIF report
+        run: >-
+          cargo run -p evmguard-cli -- preflight
+          --rpc-url "${{ inputs.rpc_url }}"
+          --chain-id "${{ inputs.chain_id }}"
+          --from "${{ inputs.from }}"
+          --to "${{ inputs.to }}"
+          --data "${{ inputs.data }}"
+          --value "${{ inputs.value }}"
+          --format sarif > evmguard.sarif
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: evmguard.sarif

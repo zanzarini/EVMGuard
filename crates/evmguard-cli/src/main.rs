@@ -5,10 +5,10 @@ use evmguard_core::{PreflightResult, ProxyReport, TransactionRequest};
 use evmguard_report::{render, render_proxy, OutputFormat};
 use evmguard_rpc::RpcClient;
 
-const INSPECT_USAGE: &str = "Usage:\n  evmguard inspect --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json]";
-const PREFLIGHT_USAGE: &str = "Usage:\n  evmguard preflight --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json]";
-const TRACE_USAGE: &str = "Usage:\n  evmguard trace --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json]";
-const PROXY_USAGE: &str = "Usage:\n  evmguard proxy --rpc-url <url> --chain-id <id> --address <address> [--format text|json]";
+const INSPECT_USAGE: &str = "Usage:\n  evmguard inspect --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json|sarif]";
+const PREFLIGHT_USAGE: &str = "Usage:\n  evmguard preflight --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json|sarif]";
+const TRACE_USAGE: &str = "Usage:\n  evmguard trace --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json|sarif]";
+const PROXY_USAGE: &str = "Usage:\n  evmguard proxy --rpc-url <url> --chain-id <id> --address <address> [--format text|json|sarif]";
 
 struct ParsedArguments {
     transaction: TransactionRequest,
@@ -171,7 +171,7 @@ fn parse_arguments(
             "--value" => transaction.value = value,
             "--format" => {
                 format = OutputFormat::parse(&value)
-                    .ok_or_else(|| "Format must be text or json.".to_owned())?;
+                    .ok_or_else(|| "Format must be text, json, or sarif.".to_owned())?;
             }
             "--rpc-url" if accepts_rpc_url => rpc_url = Some(value),
             "--rpc-url" => {
@@ -233,7 +233,7 @@ fn parse_proxy_arguments(
             "--address" => address = Some(value),
             "--format" => {
                 format = OutputFormat::parse(&value)
-                    .ok_or_else(|| "Format must be text or json.".to_owned())?;
+                    .ok_or_else(|| "Format must be text, json, or sarif.".to_owned())?;
             }
             _ => return Err(PROXY_USAGE.to_owned()),
         }

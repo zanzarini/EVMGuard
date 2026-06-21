@@ -1,9 +1,12 @@
-use evmguard_core::{AnalysisReport, Finding, ProxyReport};
+use std::collections::BTreeMap;
+
+use evmguard_core::{AnalysisReport, Finding, ProxyReport, Severity};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputFormat {
     Text,
     Json,
+    Sarif,
 }
 
 impl OutputFormat {
@@ -11,6 +14,7 @@ impl OutputFormat {
         match value {
             "text" => Some(Self::Text),
             "json" => Some(Self::Json),
+            "sarif" => Some(Self::Sarif),
             _ => None,
         }
     }
@@ -20,6 +24,7 @@ pub fn render(report: &AnalysisReport, format: OutputFormat) -> String {
     match format {
         OutputFormat::Text => render_text(report),
         OutputFormat::Json => render_json(report),
+        OutputFormat::Sarif => render_sarif(&report.findings),
     }
 }
 
@@ -27,6 +32,7 @@ pub fn render_proxy(report: &ProxyReport, format: OutputFormat) -> String {
     match format {
         OutputFormat::Text => render_proxy_text(report),
         OutputFormat::Json => render_proxy_json(report),
+        OutputFormat::Sarif => render_sarif(&report.findings),
     }
 }
 
@@ -143,6 +149,50 @@ fn optional_json_string(value: Option<&str>) -> String {
         .unwrap_or_else(|| "null".to_owned())
 }
 
+fn render_sarif(findings: &[Finding]) -> String {
+    let mut rules = BTreeMap::new();
+    for finding in findings {
+        rules.entry(&finding.rule_id).or_insert(finding.severity);
+    }
+
+    let rules = rules
+        .into_iter()
+        .map(|(rule_id, severity)| {
+            format!(
+                "{{\n            \"id\": \"{}\",\n            \"defaultConfiguration\": {{ \"level\": \"{}\" }}\n          }}",
+                escape_json(rule_id),
+                sarif_level(severity),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",\n          ");
+    let results = findings
+        .iter()
+        .map(|finding| {
+            format!(
+                "{{\n          \"ruleId\": \"{}\",\n          \"level\": \"{}\",\n          \"message\": {{ \"text\": \"{}\" }}\n        }}",
+                escape_json(&finding.rule_id),
+                sarif_level(finding.severity),
+                escape_json(&finding.message),
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",\n        ");
+
+    format!(
+        "{{\n  \"$schema\": \"https://json.schemastore.org/sarif-2.1.0.json\",\n  \"version\": \"2.1.0\",\n  \"runs\": [\n    {{\n      \"tool\": {{\n        \"driver\": {{\n          \"name\": \"EVMGuard\",\n          \"rules\": [\n          {}\n          ]\n        }}\n      }},\n      \"results\": [\n        {}\n      ]\n    }}\n  ]\n}}\n",
+        rules, results,
+    )
+}
+
+fn sarif_level(severity: Severity) -> &'static str {
+    match severity {
+        Severity::Info => "note",
+        Severity::Warning => "warning",
+        Severity::Critical => "error",
+    }
+}
+
 fn render_preflight_json(preflight: &evmguard_core::PreflightResult) -> String {
     format!(
         "{{\n    \"rpcChainId\": {},\n    \"gasEstimate\": {}\n  }}",
@@ -195,5 +245,24 @@ mod tests {
         assert!(output.contains("\"chainId\": 8453"));
         assert!(output.contains("\"ruleId\": \"test.rule\""));
         assert!(output.contains("\"gasEstimate\": 21000"));
+    }
+
+    #[test]
+    fn renders_sarif_report() {
+        let report = AnalysisReport {
+            transaction: TransactionRequest::default(),
+            findings: vec![Finding::new(
+                "test.critical",
+                Severity::Critical,
+                "Critical test finding.",
+            )],
+            preflight: None,
+        };
+
+        let output = render(&report, OutputFormat::Sarif);
+
+        assert!(output.contains("\"version\": \"2.1.0\""));
+        assert!(output.contains("\"ruleId\": \"test.critical\""));
+        assert!(output.contains("\"level\": \"error\""));
     }
 }
