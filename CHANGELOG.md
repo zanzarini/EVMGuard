@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## 1.2.0
 
 ### Added
 
@@ -11,6 +11,14 @@ All notable changes to this project are documented in this file.
 - Detection of ERC-20 transfer and transferFrom calls for transaction context.
 - Detection of contract creation (CREATE and CREATE2) in execution traces.
 - Detection of Uniswap Permit2 operations: allowance approval with an unlimited uint160 finding, signed permit and permitTransferFrom calls, and transferFrom.
+
+### Changed
+
+- JSON and SARIF reports are now produced by a serializer, which sorts object keys and guarantees well-formed output.
+
+### Fixed
+
+- JSON and SARIF rendering now escapes all control characters in the U+0000 to U+001F range, preventing invalid output.
 
 ## 1.1.0
 
