@@ -31,3 +31,7 @@ Transaction request
 
 - Local fork execution through Anvil.
 - Trace rules for token transfers.
+
+## Rule packs
+
+The analyzer exposes `Rule`, `RulePack`, and `RuleRegistry` for compiled extensions. Rule packs receive a transaction, trace, or proxy context and return standard findings. Dynamic loading is intentionally outside the initial interface.

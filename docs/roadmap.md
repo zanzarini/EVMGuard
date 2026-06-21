@@ -23,6 +23,5 @@
 
 ## v1.0.0
 
-- Stable rule interfaces.
-- Plugin architecture.
+- Stable rule interfaces and compiled rule pack registry.
 - Supported network and provider documentation.

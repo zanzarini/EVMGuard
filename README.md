@@ -104,6 +104,10 @@ The inspection reads implementation, administrator, and beacon storage slots. It
 
 The `EVMGuard SARIF` workflow can be started manually from the Actions tab. It runs a transaction preflight with the supplied RPC endpoint and uploads the resulting SARIF report to GitHub Code Scanning.
 
+## Network support
+
+Supported JSON-RPC methods and endpoint requirements are documented in [docs/providers.md](docs/providers.md).
+
 ## Roadmap
 
 The initial roadmap is available in [docs/roadmap.md](docs/roadmap.md). The architecture and rule model are documented in [docs/architecture.md](docs/architecture.md) and [docs/rules.md](docs/rules.md).

@@ -1,4 +1,5 @@
 pub mod config;
+pub mod plugin;
 
 use evmguard_core::{
     AnalysisReport, CallFrame, CallType, Finding, ProxyInfo, ProxyKind, Severity,
@@ -6,6 +7,7 @@ use evmguard_core::{
 };
 
 pub use config::RuleConfiguration;
+pub use plugin::{Rule, RuleContext, RulePack, RuleRegistry};
 
 const ERC20_APPROVE_SELECTOR: &str = "095ea7b3";
 const ERC20_APPROVE_LENGTH: usize = 8 + 64 + 64;
