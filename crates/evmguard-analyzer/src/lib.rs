@@ -17,6 +17,10 @@ const ERC20_INCREASE_ALLOWANCE_SELECTOR: &str = "39509351";
 const ERC20_INCREASE_ALLOWANCE_LENGTH: usize = 8 + 64 + 64;
 const ERC20_PERMIT_SELECTOR: &str = "d505accf";
 const ERC20_PERMIT_LENGTH: usize = 8 + 64 * 7;
+const ERC20_TRANSFER_SELECTOR: &str = "a9059cbb";
+const ERC20_TRANSFER_LENGTH: usize = 8 + 64 + 64;
+const ERC20_TRANSFER_FROM_SELECTOR: &str = "23b872dd";
+const ERC20_TRANSFER_FROM_LENGTH: usize = 8 + 64 * 3;
 const PRIVILEGED_ACTION_SELECTORS: [(&str, &str); 5] = [
     ("3659cfe6", "upgradeTo"),
     ("4f1ef286", "upgradeToAndCall"),
@@ -161,6 +165,14 @@ fn inspect_calldata(data: &str) -> Vec<Finding> {
         return inspect_erc20_permit(payload);
     }
 
+    if payload.starts_with(ERC20_TRANSFER_SELECTOR) {
+        return inspect_erc20_transfer(payload);
+    }
+
+    if payload.starts_with(ERC20_TRANSFER_FROM_SELECTOR) {
+        return inspect_erc20_transfer_from(payload);
+    }
+
     for (selector, action) in PRIVILEGED_ACTION_SELECTORS {
         if payload.starts_with(selector) {
             return vec![Finding::new(
@@ -257,6 +269,38 @@ fn inspect_erc20_permit(payload: &str) -> Vec<Finding> {
     }
 
     findings
+}
+
+fn inspect_erc20_transfer(payload: &str) -> Vec<Finding> {
+    if payload.len() < ERC20_TRANSFER_LENGTH {
+        return vec![Finding::new(
+            "erc20.transfer-malformed",
+            Severity::Warning,
+            "ERC-20 transfer calldata is shorter than the expected ABI encoding.",
+        )];
+    }
+
+    vec![Finding::new(
+        "erc20.transfer",
+        Severity::Info,
+        "ERC-20 transfer call detected.",
+    )]
+}
+
+fn inspect_erc20_transfer_from(payload: &str) -> Vec<Finding> {
+    if payload.len() < ERC20_TRANSFER_FROM_LENGTH {
+        return vec![Finding::new(
+            "erc20.transfer-from-malformed",
+            Severity::Warning,
+            "ERC-20 transferFrom calldata is shorter than the expected ABI encoding.",
+        )];
+    }
+
+    vec![Finding::new(
+        "erc20.transfer-from",
+        Severity::Info,
+        "ERC-20 transferFrom call detected.",
+    )]
 }
 
 fn grants_max_allowance(word: &str) -> bool {
@@ -393,6 +437,30 @@ mod tests {
             .findings
             .iter()
             .any(|finding| finding.rule_id == "erc20.unlimited-approval"));
+    }
+
+    #[test]
+    fn reports_erc20_transfer() {
+        let recipient = "0".repeat(64);
+        let amount = format!("{:064x}", 500);
+        let data = format!("0xa9059cbb{recipient}{amount}");
+        let report = inspect(transaction_with_data(&data));
+
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "erc20.transfer");
+        assert_eq!(report.highest_severity(), Severity::Info);
+    }
+
+    #[test]
+    fn reports_erc20_transfer_from() {
+        let sender = "0".repeat(64);
+        let recipient = "0".repeat(64);
+        let amount = format!("{:064x}", 500);
+        let data = format!("0x23b872dd{sender}{recipient}{amount}");
+        let report = inspect(transaction_with_data(&data));
+
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "erc20.transfer-from");
     }
 
     #[test]
