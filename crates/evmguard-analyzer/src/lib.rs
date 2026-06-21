@@ -96,6 +96,15 @@ fn inspect_frame(frame: &CallFrame, depth: usize, findings: &mut Vec<Finding>) {
         ));
     }
 
+    if matches!(frame.call_type, CallType::Create | CallType::Create2) {
+        let target = frame.to.as_deref().unwrap_or("a new address");
+        findings.push(Finding::new(
+            "trace.contract-creation",
+            Severity::Info,
+            format!("Contract creation detected at depth {depth} for {target}."),
+        ));
+    }
+
     if depth > 0 && is_nonzero_quantity(&frame.value) {
         let target = frame.to.as_deref().unwrap_or("a created contract");
         findings.push(Finding::new(
@@ -530,6 +539,35 @@ mod tests {
         assert_eq!(findings[1].rule_id, "trace.internal-native-transfer");
         assert_eq!(findings[2].rule_id, "trace.execution-reverted");
         assert_eq!(findings[2].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn reports_contract_creation_in_a_trace() {
+        let trace = CallFrame {
+            call_type: CallType::Call,
+            from: "0x1111111111111111111111111111111111111111".to_owned(),
+            to: Some("0x2222222222222222222222222222222222222222".to_owned()),
+            input: "0x".to_owned(),
+            value: "0x0".to_owned(),
+            gas_used: "0x5208".to_owned(),
+            error: None,
+            calls: vec![CallFrame {
+                call_type: CallType::Create2,
+                from: "0x2222222222222222222222222222222222222222".to_owned(),
+                to: Some("0x4444444444444444444444444444444444444444".to_owned()),
+                input: "0x".to_owned(),
+                value: "0x0".to_owned(),
+                gas_used: "0x100".to_owned(),
+                error: None,
+                calls: Vec::new(),
+            }],
+        };
+
+        let findings = inspect_trace(&trace);
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].rule_id, "trace.contract-creation");
+        assert_eq!(findings[0].severity, Severity::Info);
     }
 
     #[test]
