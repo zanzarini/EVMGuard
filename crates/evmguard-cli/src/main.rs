@@ -1,6 +1,8 @@
 use std::{env, process};
 
-use evmguard_analyzer::{inspect, inspect_proxy, inspect_trace, RuleConfiguration};
+use evmguard_analyzer::{
+    inspect_proxy, inspect_trace, inspect_with_configuration, RuleConfiguration,
+};
 use evmguard_core::{PreflightResult, ProxyReport, TransactionRequest};
 use evmguard_report::{render, render_proxy, OutputFormat};
 use evmguard_rpc::RpcClient;
@@ -54,8 +56,9 @@ fn run() -> Result<(), String> {
 
 fn inspect_command(arguments: impl Iterator<Item = String>) -> Result<(), String> {
     let parsed = parse_arguments(arguments, false, INSPECT_USAGE)?;
-    let mut report = inspect(parsed.transaction);
-    report.findings = apply_configuration(report.findings, parsed.config_path.as_deref())?;
+    let configuration = load_configuration(parsed.config_path.as_deref())?;
+    let mut report = inspect_with_configuration(parsed.transaction, &configuration);
+    report.findings = configuration.apply(report.findings);
 
     print!("{}", render(&report, parsed.format));
     Ok(())
@@ -63,6 +66,7 @@ fn inspect_command(arguments: impl Iterator<Item = String>) -> Result<(), String
 
 fn preflight_command(arguments: impl Iterator<Item = String>) -> Result<(), String> {
     let parsed = parse_arguments(arguments, true, PREFLIGHT_USAGE)?;
+    let configuration = load_configuration(parsed.config_path.as_deref())?;
     let rpc_url = parsed
         .rpc_url
         .as_deref()
@@ -80,12 +84,12 @@ fn preflight_command(arguments: impl Iterator<Item = String>) -> Result<(), Stri
     let gas_estimate = client
         .estimate_gas(&parsed.transaction)
         .map_err(|error| error.to_string())?;
-    let mut report = inspect(parsed.transaction);
+    let mut report = inspect_with_configuration(parsed.transaction, &configuration);
     report.preflight = Some(PreflightResult {
         rpc_chain_id: remote_chain_id,
         gas_estimate,
     });
-    report.findings = apply_configuration(report.findings, parsed.config_path.as_deref())?;
+    report.findings = configuration.apply(report.findings);
 
     print!("{}", render(&report, parsed.format));
     Ok(())
@@ -93,6 +97,7 @@ fn preflight_command(arguments: impl Iterator<Item = String>) -> Result<(), Stri
 
 fn trace_command(arguments: impl Iterator<Item = String>) -> Result<(), String> {
     let parsed = parse_arguments(arguments, true, TRACE_USAGE)?;
+    let configuration = load_configuration(parsed.config_path.as_deref())?;
     let rpc_url = parsed
         .rpc_url
         .as_deref()
@@ -110,9 +115,9 @@ fn trace_command(arguments: impl Iterator<Item = String>) -> Result<(), String> 
     let trace = client
         .trace_call(&parsed.transaction)
         .map_err(|error| error.to_string())?;
-    let mut report = inspect(parsed.transaction);
+    let mut report = inspect_with_configuration(parsed.transaction, &configuration);
     report.findings.extend(inspect_trace(&trace));
-    report.findings = apply_configuration(report.findings, parsed.config_path.as_deref())?;
+    report.findings = configuration.apply(report.findings);
 
     print!("{}", render(&report, parsed.format));
     Ok(())
@@ -120,6 +125,7 @@ fn trace_command(arguments: impl Iterator<Item = String>) -> Result<(), String> 
 
 fn proxy_command(arguments: impl Iterator<Item = String>) -> Result<(), String> {
     let parsed = parse_proxy_arguments(arguments)?;
+    let configuration = load_configuration(parsed.config_path.as_deref())?;
     let client = RpcClient::new(&parsed.rpc_url).map_err(|error| error.to_string())?;
     let remote_chain_id = client.chain_id().map_err(|error| error.to_string())?;
 
@@ -134,7 +140,7 @@ fn proxy_command(arguments: impl Iterator<Item = String>) -> Result<(), String> 
         .inspect_proxy(&parsed.address)
         .map_err(|error| error.to_string())?;
     let report = ProxyReport {
-        findings: apply_configuration(inspect_proxy(&proxy), parsed.config_path.as_deref())?,
+        findings: configuration.apply(inspect_proxy(&proxy)),
         proxy,
     };
 
@@ -261,13 +267,10 @@ fn parse_proxy_arguments(
     })
 }
 
-fn apply_configuration(
-    findings: Vec<evmguard_core::Finding>,
-    config_path: Option<&str>,
-) -> Result<Vec<evmguard_core::Finding>, String> {
+fn load_configuration(config_path: Option<&str>) -> Result<RuleConfiguration, String> {
     match config_path {
         Some(path) => RuleConfiguration::from_path(std::path::Path::new(path))
-            .map(|config| config.apply(findings)),
-        None => Ok(findings),
+            .map_err(|error| error.to_string()),
+        None => Ok(RuleConfiguration::default()),
     }
 }
