@@ -1,11 +1,11 @@
 use std::{env, process};
 
-use evmguard_analyzer::{inspect, inspect_proxy, inspect_trace};
+use evmguard_analyzer::{inspect, inspect_proxy, inspect_trace, RuleConfiguration};
 use evmguard_core::{PreflightResult, ProxyReport, TransactionRequest};
 use evmguard_report::{render, render_proxy, OutputFormat};
 use evmguard_rpc::RpcClient;
 
-const INSPECT_USAGE: &str = "Usage:\n  evmguard inspect --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json|sarif]";
+const INSPECT_USAGE: &str = "Usage:\n  evmguard inspect --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--config <path>] [--format text|json|sarif]";
 const PREFLIGHT_USAGE: &str = "Usage:\n  evmguard preflight --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json|sarif]";
 const TRACE_USAGE: &str = "Usage:\n  evmguard trace --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json|sarif]";
 const PROXY_USAGE: &str = "Usage:\n  evmguard proxy --rpc-url <url> --chain-id <id> --address <address> [--format text|json|sarif]";
@@ -14,6 +14,7 @@ struct ParsedArguments {
     transaction: TransactionRequest,
     format: OutputFormat,
     rpc_url: Option<String>,
+    config_path: Option<String>,
 }
 
 struct ProxyArguments {
@@ -21,6 +22,7 @@ struct ProxyArguments {
     chain_id: u64,
     address: String,
     format: OutputFormat,
+    config_path: Option<String>,
 }
 
 fn main() {
@@ -52,7 +54,8 @@ fn run() -> Result<(), String> {
 
 fn inspect_command(arguments: impl Iterator<Item = String>) -> Result<(), String> {
     let parsed = parse_arguments(arguments, false, INSPECT_USAGE)?;
-    let report = inspect(parsed.transaction);
+    let mut report = inspect(parsed.transaction);
+    report.findings = apply_configuration(report.findings, parsed.config_path.as_deref())?;
 
     print!("{}", render(&report, parsed.format));
     Ok(())
@@ -82,6 +85,7 @@ fn preflight_command(arguments: impl Iterator<Item = String>) -> Result<(), Stri
         rpc_chain_id: remote_chain_id,
         gas_estimate,
     });
+    report.findings = apply_configuration(report.findings, parsed.config_path.as_deref())?;
 
     print!("{}", render(&report, parsed.format));
     Ok(())
@@ -108,6 +112,7 @@ fn trace_command(arguments: impl Iterator<Item = String>) -> Result<(), String> 
         .map_err(|error| error.to_string())?;
     let mut report = inspect(parsed.transaction);
     report.findings.extend(inspect_trace(&trace));
+    report.findings = apply_configuration(report.findings, parsed.config_path.as_deref())?;
 
     print!("{}", render(&report, parsed.format));
     Ok(())
@@ -129,7 +134,7 @@ fn proxy_command(arguments: impl Iterator<Item = String>) -> Result<(), String> 
         .inspect_proxy(&parsed.address)
         .map_err(|error| error.to_string())?;
     let report = ProxyReport {
-        findings: inspect_proxy(&proxy),
+        findings: apply_configuration(inspect_proxy(&proxy), parsed.config_path.as_deref())?,
         proxy,
     };
 
@@ -148,13 +153,13 @@ fn parse_arguments(
     };
     let mut format = OutputFormat::Text;
     let mut rpc_url = None;
+    let mut config_path = None;
     while let Some(argument) = arguments.next() {
         let value = match argument.as_str() {
-            "--chain-id" | "--from" | "--to" | "--data" | "--value" | "--format" | "--rpc-url" => {
-                arguments
-                    .next()
-                    .ok_or_else(|| format!("Missing value for {argument}.\n{command_usage}"))?
-            }
+            "--chain-id" | "--from" | "--to" | "--data" | "--value" | "--format" | "--rpc-url"
+            | "--config" => arguments
+                .next()
+                .ok_or_else(|| format!("Missing value for {argument}.\n{command_usage}"))?,
             "--help" | "-h" => return Err(command_usage.to_owned()),
             _ => return Err(format!("Unknown argument: {argument}.\n{command_usage}")),
         };
@@ -174,6 +179,7 @@ fn parse_arguments(
                     .ok_or_else(|| "Format must be text, json, or sarif.".to_owned())?;
             }
             "--rpc-url" if accepts_rpc_url => rpc_url = Some(value),
+            "--config" => config_path = Some(value),
             "--rpc-url" => {
                 return Err(format!(
                     "--rpc-url is only valid with the preflight command.\n{command_usage}"
@@ -199,6 +205,7 @@ fn parse_arguments(
         transaction,
         format,
         rpc_url,
+        config_path,
     })
 }
 
@@ -213,10 +220,11 @@ fn parse_proxy_arguments(
     let mut chain_id = 0;
     let mut address = None;
     let mut format = OutputFormat::Text;
+    let mut config_path = None;
 
     while let Some(argument) = arguments.next() {
         let value = match argument.as_str() {
-            "--rpc-url" | "--chain-id" | "--address" | "--format" => arguments
+            "--rpc-url" | "--chain-id" | "--address" | "--format" | "--config" => arguments
                 .next()
                 .ok_or_else(|| format!("Missing value for {argument}.\n{PROXY_USAGE}"))?,
             "--help" | "-h" => return Err(PROXY_USAGE.to_owned()),
@@ -235,6 +243,7 @@ fn parse_proxy_arguments(
                 format = OutputFormat::parse(&value)
                     .ok_or_else(|| "Format must be text, json, or sarif.".to_owned())?;
             }
+            "--config" => config_path = Some(value),
             _ => return Err(PROXY_USAGE.to_owned()),
         }
     }
@@ -248,5 +257,17 @@ fn parse_proxy_arguments(
         chain_id,
         address: address.ok_or_else(|| "--address is required.\n".to_owned() + PROXY_USAGE)?,
         format,
+        config_path,
     })
+}
+
+fn apply_configuration(
+    findings: Vec<evmguard_core::Finding>,
+    config_path: Option<&str>,
+) -> Result<Vec<evmguard_core::Finding>, String> {
+    match config_path {
+        Some(path) => RuleConfiguration::from_path(std::path::Path::new(path))
+            .map(|config| config.apply(findings)),
+        None => Ok(findings),
+    }
 }

@@ -38,6 +38,20 @@ Use `--format json` for automation-friendly output.
 
 Use `--format sarif` to generate a SARIF 2.1.0 report for security tooling.
 
+## Rule configuration
+
+Use `--config evmguard.toml` with any command to disable rules or override their severity:
+
+```toml
+[rules]
+disabled = ["transaction.unknown-selector"]
+
+[rules.severity]
+"erc20.unlimited-approval" = "warning"
+```
+
+Supported severities are `info`, `warning`, and `critical`.
+
 ## RPC preflight
 
 Run a preflight request against a standard EVM JSON-RPC endpoint before submitting a transaction:
