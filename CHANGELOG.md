@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.1.0
+
+### Added
+
+- Anvil-backed integration testing for RPC preflight behavior.
+- LCOV coverage reports as CI workflow artifacts.
+- Release binaries for Linux, Windows, and macOS.
+- Transaction findings for NFT operator approvals, privileged contract actions, and zero-address recipients.
+- Configurable high-risk contract recipients through TOML rule configuration.
+- Feature request and pull request templates for contributors.
+
 ## 1.0.0
 
 ### Added

@@ -25,3 +25,10 @@
 
 - Stable rule interfaces and compiled rule pack registry.
 - Supported network and provider documentation.
+
+## v1.1.0
+
+- Anvil integration testing and LCOV coverage artifacts.
+- Release binaries for Linux, Windows, and macOS.
+- Expanded transaction risk rules and configurable high-risk recipients.
+- Contribution templates for feature requests and pull requests.

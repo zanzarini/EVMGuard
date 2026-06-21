@@ -4,7 +4,7 @@ EVMGuard is an open-source EVM transaction inspection tool for identifying secur
 
 ## Status
 
-Version 1.0.0 is the first stable release. It provides transaction inspection, RPC simulation, trace and proxy analysis, configurable rules, and security-oriented reports.
+Version 1.1.0 adds local EVM integration testing, coverage reporting, release binaries, and expanded transaction risk analysis to the stable core.
 
 ## Scope
 
@@ -16,12 +16,18 @@ EVMGuard will inspect transaction requests and execution traces to identify effe
 - Text, JSON, and SARIF reports.
 - Detection of ERC-20 `approve` calls.
 - Critical finding for unlimited ERC-20 approvals.
+- Critical findings for NFT operator approvals, privileged contract actions, and zero-address recipients.
+- Configurable high-risk recipient detection.
 - RPC preflight with endpoint chain ID validation and gas estimation.
 - Call trace analysis for delegate calls, internal native transfers, and execution errors.
 - EIP-1967 proxy inspection for implementation, administrator, beacon, and UUPS metadata.
 - TOML rule configuration and reusable rule pack discovery.
 - Compiled rule pack interface for custom transaction, trace, and proxy checks.
-- Unit tests for inspection rules.
+- Unit, Anvil integration, and coverage reporting workflows.
+
+## Binary releases
+
+Linux, Windows, and macOS binaries are attached to each [GitHub release](https://github.com/zanzarini/EVMGuard/releases).
 
 ## Quick start
 
