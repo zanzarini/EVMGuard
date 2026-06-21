@@ -1,0 +1,11 @@
+[package]
+name = "evmguard-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Core domain types for EVMGuard."
+
+[lib]
+path = "src/lib.rs"

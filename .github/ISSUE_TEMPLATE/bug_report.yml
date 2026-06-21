@@ -1,0 +1,34 @@
+name: Bug report
+description: Report an unexpected EVMGuard behavior.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: Provide a minimal reproducible example. Do not include private keys or sensitive production data.
+  - type: input
+    id: version
+    attributes:
+      label: EVMGuard version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or input
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true

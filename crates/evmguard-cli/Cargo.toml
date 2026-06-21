@@ -1,0 +1,17 @@
+[package]
+name = "evmguard-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Command-line interface for EVMGuard."
+
+[[bin]]
+name = "evmguard"
+path = "src/main.rs"
+
+[dependencies]
+evmguard-analyzer = { path = "../evmguard-analyzer" }
+evmguard-core = { path = "../evmguard-core" }
+evmguard-report = { path = "../evmguard-report" }

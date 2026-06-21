@@ -1,0 +1,38 @@
+name: Rule request
+description: Propose a new transaction or trace analysis rule.
+title: "rule: "
+labels:
+  - rule
+body:
+  - type: input
+    id: rule_id
+    attributes:
+      label: Proposed rule identifier
+      placeholder: category.rule-name
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Proposed severity
+      options:
+        - info
+        - warning
+        - critical
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Rationale
+      description: Explain the risk or behavior the rule should identify.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example transaction or trace
+      description: Exclude private keys and sensitive production data.
+      render: text
+    validations:
+      required: true
