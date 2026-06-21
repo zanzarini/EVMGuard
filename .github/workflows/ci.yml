@@ -29,3 +29,18 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Run tests
         run: cargo test --workspace
+
+  anvil:
+    name: Test against Anvil
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+      - name: Run Anvil integration test
+        run: cargo test -p evmguard-cli --test anvil -- --ignored
