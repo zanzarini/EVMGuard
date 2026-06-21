@@ -10,9 +10,8 @@
 ## v0.2.0
 
 - HTTP JSON-RPC preflight with chain validation and gas estimation.
-- RPC adapter for trace-capable EVM nodes.
-- Transaction execution simulation.
-- Transfer and delegate call findings.
+- `debug_traceCall` integration with the `callTracer` tracer.
+- Delegate call, internal transfer, and execution error findings.
 - Proxy detection for EIP-1967 and UUPS contracts.
 
 ## v0.3.0

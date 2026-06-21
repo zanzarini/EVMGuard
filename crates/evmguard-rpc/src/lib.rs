@@ -1,6 +1,6 @@
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, time::Duration};
 
-use evmguard_core::TransactionRequest;
+use evmguard_core::{CallFrame, CallType, TransactionRequest};
 use reqwest::{blocking::Client, StatusCode, Url};
 use serde_json::{json, Value};
 
@@ -56,7 +56,10 @@ impl RpcClient {
             ));
         }
 
-        let client = Client::builder().build().map_err(RpcError::Transport)?;
+        let client = Client::builder()
+            .timeout(Duration::from_secs(15))
+            .build()
+            .map_err(RpcError::Transport)?;
 
         Ok(Self { client, endpoint })
     }
@@ -70,6 +73,19 @@ impl RpcClient {
         let result = self.call("eth_estimateGas", json!([transaction_object(transaction)?]))?;
 
         parse_quantity(result.as_str(), "eth_estimateGas")
+    }
+
+    pub fn trace_call(&self, transaction: &TransactionRequest) -> Result<CallFrame, RpcError> {
+        let result = self.call(
+            "debug_traceCall",
+            json!([
+                transaction_object(transaction)?,
+                "latest",
+                { "tracer": "callTracer" }
+            ]),
+        )?;
+
+        parse_call_frame(&result)
     }
 
     fn call(&self, method: &str, params: Value) -> Result<Value, RpcError> {
@@ -111,6 +127,61 @@ impl RpcClient {
             .get("result")
             .cloned()
             .ok_or_else(|| RpcError::InvalidResponse("missing result field".to_owned()))
+    }
+}
+
+fn parse_call_frame(value: &Value) -> Result<CallFrame, RpcError> {
+    let call_type = value
+        .get("type")
+        .and_then(Value::as_str)
+        .map(CallType::from_trace_value)
+        .unwrap_or(CallType::Call);
+    let from = required_string(value, "from")?;
+    let to = optional_string(value, "to")?;
+    let input = optional_string(value, "input")?.unwrap_or_else(|| "0x".to_owned());
+    let value_transferred = optional_string(value, "value")?.unwrap_or_else(|| "0x0".to_owned());
+    let gas_used = optional_string(value, "gasUsed")?.unwrap_or_else(|| "0x0".to_owned());
+    let error = optional_string(value, "error")?;
+    let calls = value
+        .get("calls")
+        .map(|calls| {
+            calls
+                .as_array()
+                .ok_or_else(|| {
+                    RpcError::InvalidResponse("calls field must be an array".to_owned())
+                })?
+                .iter()
+                .map(parse_call_frame)
+                .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
+
+    Ok(CallFrame {
+        call_type,
+        from,
+        to,
+        input,
+        value: value_transferred,
+        gas_used,
+        error,
+        calls,
+    })
+}
+
+fn required_string(value: &Value, field: &str) -> Result<String, RpcError> {
+    optional_string(value, field)?.ok_or_else(|| {
+        RpcError::InvalidResponse(format!("call trace is missing required {field} field"))
+    })
+}
+
+fn optional_string(value: &Value, field: &str) -> Result<Option<String>, RpcError> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(value)) => Ok(Some(value.to_owned())),
+        Some(_) => Err(RpcError::InvalidResponse(format!(
+            "call trace field {field} must be a string"
+        ))),
     }
 }
 
@@ -212,7 +283,7 @@ mod tests {
     };
 
     use super::{RpcClient, RpcError};
-    use evmguard_core::TransactionRequest;
+    use evmguard_core::{CallType, TransactionRequest};
     use serde_json::Value;
 
     fn transaction() -> TransactionRequest {
@@ -321,6 +392,21 @@ mod tests {
                 message
             } if message == "execution reverted"
         ));
+    }
+
+    #[test]
+    fn parses_nested_call_traces() {
+        let response = r#"{"jsonrpc":"2.0","id":1,"result":{"type":"CALL","from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","input":"0x","value":"0x0","gasUsed":"0x5208","calls":[{"type":"DELEGATECALL","from":"0x2222222222222222222222222222222222222222","to":"0x3333333333333333333333333333333333333333","input":"0x","value":"0x0","gasUsed":"0x100"}]}}"#;
+        let (endpoint, handle) = test_server(response);
+        let client = RpcClient::new(&endpoint).expect("create client");
+
+        let trace = client.trace_call(&transaction()).expect("trace call");
+        let request = handle.join().expect("join test server");
+
+        assert_eq!(request["method"], "debug_traceCall");
+        assert_eq!(request["params"][2]["tracer"], "callTracer");
+        assert_eq!(trace.frame_count(), 2);
+        assert_eq!(trace.calls[0].call_type, CallType::DelegateCall);
     }
 
     #[test]

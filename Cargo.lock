@@ -80,6 +80,7 @@ dependencies = [
  "evmguard-core",
  "evmguard-report",
  "evmguard-rpc",
+ "serde_json",
 ]
 
 [[package]]
