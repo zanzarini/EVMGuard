@@ -15,11 +15,32 @@ pub struct RuleConfiguration {
 
 impl RuleConfiguration {
     pub fn from_path(path: &Path) -> Result<Self, String> {
-        let content = fs::read_to_string(path)
+        Self::load(path, &mut BTreeSet::new())
+    }
+
+    fn load(path: &Path, visited: &mut BTreeSet<std::path::PathBuf>) -> Result<Self, String> {
+        let path = path
+            .canonicalize()
+            .map_err(|error| format!("Unable to resolve configuration file: {error}"))?;
+
+        if !visited.insert(path.clone()) {
+            return Err(format!(
+                "Configuration include cycle detected: {}",
+                path.display()
+            ));
+        }
+
+        let content = fs::read_to_string(&path)
             .map_err(|error| format!("Unable to read configuration file: {error}"))?;
         let document: ConfigurationDocument = toml::from_str(&content)
             .map_err(|error| format!("Unable to parse configuration file: {error}"))?;
-        let mut severity = BTreeMap::new();
+        let mut configuration = Self::default();
+        let directory = path.parent().unwrap_or_else(|| Path::new("."));
+
+        for include in document.include {
+            let included = Self::load(&directory.join(include), visited)?;
+            configuration.merge(included);
+        }
 
         for (rule_id, level) in document.rules.severity {
             let severity_value = match level.as_str() {
@@ -28,13 +49,12 @@ impl RuleConfiguration {
                 "critical" => Severity::Critical,
                 _ => return Err(format!("Unsupported severity for {rule_id}: {level}")),
             };
-            severity.insert(rule_id, severity_value);
+            configuration.severity.insert(rule_id, severity_value);
         }
 
-        Ok(Self {
-            disabled: document.rules.disabled.into_iter().collect(),
-            severity,
-        })
+        configuration.disabled.extend(document.rules.disabled);
+
+        Ok(configuration)
     }
 
     pub fn apply(&self, findings: Vec<Finding>) -> Vec<Finding> {
@@ -49,10 +69,17 @@ impl RuleConfiguration {
             })
             .collect()
     }
+
+    fn merge(&mut self, other: Self) {
+        self.disabled.extend(other.disabled);
+        self.severity.extend(other.severity);
+    }
 }
 
 #[derive(Deserialize)]
 struct ConfigurationDocument {
+    #[serde(default)]
+    include: Vec<String>,
     #[serde(default)]
     rules: RulesDocument,
 }
@@ -89,6 +116,34 @@ mod tests {
         ]);
 
         assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn applies_included_rule_packs_before_local_overrides() {
+        let directory = env::temp_dir().join(format!("evmguard-pack-{}", std::process::id()));
+        fs::create_dir_all(&directory).expect("create rule pack directory");
+        let included = directory.join("base.toml");
+        let root = directory.join("evmguard.toml");
+        fs::write(
+            &included,
+            "[rules.severity]\n\"rule.adjusted\" = \"warning\"\n",
+        )
+        .expect("write included rule pack");
+        fs::write(
+            &root,
+            "include = [\"base.toml\"]\n\n[rules.severity]\n\"rule.adjusted\" = \"critical\"\n",
+        )
+        .expect("write root configuration");
+        let configuration = RuleConfiguration::from_path(&root).expect("load configuration");
+        fs::remove_dir_all(&directory).expect("remove rule pack directory");
+
+        let findings = configuration.apply(vec![Finding::new(
+            "rule.adjusted",
+            Severity::Info,
+            "Adjusted finding.",
+        )]);
+
         assert_eq!(findings[0].severity, Severity::Critical);
     }
 }

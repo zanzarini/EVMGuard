@@ -31,4 +31,3 @@ Transaction request
 
 - Local fork execution through Anvil.
 - Trace rules for token transfers.
-- External rule packs.

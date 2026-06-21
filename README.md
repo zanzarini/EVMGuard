@@ -52,6 +52,8 @@ disabled = ["transaction.unknown-selector"]
 
 Supported severities are `info`, `warning`, and `critical`.
 
+Use `include = ["path/to/rules.toml"]` at the top level to load reusable rule packs. Local configuration overrides included severities.
+
 ## RPC preflight
 
 Run a preflight request against a standard EVM JSON-RPC endpoint before submitting a transaction:
