@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use evmguard_core::{AnalysisReport, Finding, ProxyReport, Severity};
+use serde_json::{json, Value};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum OutputFormat {
@@ -65,29 +66,25 @@ fn render_text(report: &AnalysisReport) -> String {
 }
 
 fn render_json(report: &AnalysisReport) -> String {
-    let findings = report
-        .findings
-        .iter()
-        .map(render_finding_json)
-        .collect::<Vec<_>>()
-        .join(",\n    ");
-    let preflight = report
-        .preflight
-        .as_ref()
-        .map(render_preflight_json)
-        .unwrap_or_else(|| "null".to_owned());
+    let value = json!({
+        "transaction": {
+            "chainId": report.transaction.chain_id,
+            "from": report.transaction.from,
+            "to": report.transaction.to,
+            "data": report.transaction.data,
+            "value": report.transaction.value,
+        },
+        "highestSeverity": report.highest_severity().as_str(),
+        "preflight": report.preflight.as_ref().map(|preflight| {
+            json!({
+                "rpcChainId": preflight.rpc_chain_id,
+                "gasEstimate": preflight.gas_estimate,
+            })
+        }),
+        "findings": report.findings.iter().map(finding_value).collect::<Vec<_>>(),
+    });
 
-    format!(
-        "{{\n  \"transaction\": {{\n    \"chainId\": {},\n    \"from\": \"{}\",\n    \"to\": \"{}\",\n    \"data\": \"{}\",\n    \"value\": \"{}\"\n  }},\n  \"highestSeverity\": \"{}\",\n  \"preflight\": {},\n  \"findings\": [\n    {}\n  ]\n}}\n",
-        report.transaction.chain_id,
-        escape_json(&report.transaction.from),
-        escape_json(&report.transaction.to),
-        escape_json(&report.transaction.data),
-        escape_json(&report.transaction.value),
-        report.highest_severity().as_str(),
-        preflight,
-        findings,
-    )
+    to_json_document(&value)
 }
 
 fn render_proxy_text(report: &ProxyReport) -> String {
@@ -119,70 +116,63 @@ fn render_proxy_text(report: &ProxyReport) -> String {
 }
 
 fn render_proxy_json(report: &ProxyReport) -> String {
-    let kind = report
-        .proxy
-        .kind
-        .as_ref()
-        .map(|kind| format!("\"{}\"", kind.as_str()))
-        .unwrap_or_else(|| "null".to_owned());
-    let findings = report
-        .findings
-        .iter()
-        .map(render_finding_json)
-        .collect::<Vec<_>>()
-        .join(",\n    ");
+    let value = json!({
+        "proxy": {
+            "address": report.proxy.address,
+            "kind": report.proxy.kind.as_ref().map(|kind| kind.as_str()),
+            "implementation": report.proxy.implementation,
+            "admin": report.proxy.admin,
+            "beacon": report.proxy.beacon,
+        },
+        "findings": report.findings.iter().map(finding_value).collect::<Vec<_>>(),
+    });
 
-    format!(
-        "{{\n  \"proxy\": {{\n    \"address\": \"{}\",\n    \"kind\": {},\n    \"implementation\": {},\n    \"admin\": {},\n    \"beacon\": {}\n  }},\n  \"findings\": [\n    {}\n  ]\n}}\n",
-        escape_json(&report.proxy.address),
-        kind,
-        optional_json_string(report.proxy.implementation.as_deref()),
-        optional_json_string(report.proxy.admin.as_deref()),
-        optional_json_string(report.proxy.beacon.as_deref()),
-        findings,
-    )
-}
-
-fn optional_json_string(value: Option<&str>) -> String {
-    value
-        .map(|value| format!("\"{}\"", escape_json(value)))
-        .unwrap_or_else(|| "null".to_owned())
+    to_json_document(&value)
 }
 
 fn render_sarif(findings: &[Finding]) -> String {
-    let mut rules = BTreeMap::new();
+    let mut severities = BTreeMap::new();
     for finding in findings {
-        rules.entry(&finding.rule_id).or_insert(finding.severity);
+        severities
+            .entry(finding.rule_id.as_str())
+            .or_insert(finding.severity);
     }
 
-    let rules = rules
+    let rules = severities
         .into_iter()
         .map(|(rule_id, severity)| {
-            format!(
-                "{{\n            \"id\": \"{}\",\n            \"defaultConfiguration\": {{ \"level\": \"{}\" }}\n          }}",
-                escape_json(rule_id),
-                sarif_level(severity),
-            )
+            json!({
+                "id": rule_id,
+                "defaultConfiguration": { "level": sarif_level(severity) },
+            })
         })
-        .collect::<Vec<_>>()
-        .join(",\n          ");
+        .collect::<Vec<_>>();
     let results = findings
         .iter()
         .map(|finding| {
-            format!(
-                "{{\n          \"ruleId\": \"{}\",\n          \"level\": \"{}\",\n          \"message\": {{ \"text\": \"{}\" }}\n        }}",
-                escape_json(&finding.rule_id),
-                sarif_level(finding.severity),
-                escape_json(&finding.message),
-            )
+            json!({
+                "ruleId": finding.rule_id,
+                "level": sarif_level(finding.severity),
+                "message": { "text": finding.message },
+            })
         })
-        .collect::<Vec<_>>()
-        .join(",\n        ");
+        .collect::<Vec<_>>();
 
-    format!(
-        "{{\n  \"$schema\": \"https://json.schemastore.org/sarif-2.1.0.json\",\n  \"version\": \"2.1.0\",\n  \"runs\": [\n    {{\n      \"tool\": {{\n        \"driver\": {{\n          \"name\": \"EVMGuard\",\n          \"rules\": [\n          {}\n          ]\n        }}\n      }},\n      \"results\": [\n        {}\n      ]\n    }}\n  ]\n}}\n",
-        rules, results,
-    )
+    let value = json!({
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [{
+            "tool": {
+                "driver": {
+                    "name": "EVMGuard",
+                    "rules": rules,
+                }
+            },
+            "results": results,
+        }],
+    });
+
+    to_json_document(&value)
 }
 
 fn sarif_level(severity: Severity) -> &'static str {
@@ -193,42 +183,19 @@ fn sarif_level(severity: Severity) -> &'static str {
     }
 }
 
-fn render_preflight_json(preflight: &evmguard_core::PreflightResult) -> String {
-    format!(
-        "{{\n    \"rpcChainId\": {},\n    \"gasEstimate\": {}\n  }}",
-        preflight.rpc_chain_id, preflight.gas_estimate,
-    )
+fn finding_value(finding: &Finding) -> Value {
+    json!({
+        "ruleId": finding.rule_id,
+        "severity": finding.severity.as_str(),
+        "message": finding.message,
+    })
 }
 
-fn render_finding_json(finding: &Finding) -> String {
+fn to_json_document(value: &Value) -> String {
     format!(
-        "{{\n      \"ruleId\": \"{}\",\n      \"severity\": \"{}\",\n      \"message\": \"{}\"\n    }}",
-        escape_json(&finding.rule_id),
-        finding.severity.as_str(),
-        escape_json(&finding.message),
+        "{}\n",
+        serde_json::to_string_pretty(value).expect("report values are always serializable")
     )
-}
-
-fn escape_json(value: &str) -> String {
-    let mut escaped = String::with_capacity(value.len());
-
-    for character in value.chars() {
-        match character {
-            '\\' => escaped.push_str("\\\\"),
-            '"' => escaped.push_str("\\\""),
-            '\n' => escaped.push_str("\\n"),
-            '\r' => escaped.push_str("\\r"),
-            '\t' => escaped.push_str("\\t"),
-            '\u{0008}' => escaped.push_str("\\b"),
-            '\u{000c}' => escaped.push_str("\\f"),
-            control if (control as u32) < 0x20 => {
-                escaped.push_str(&format!("\\u{:04x}", control as u32));
-            }
-            other => escaped.push(other),
-        }
-    }
-
-    escaped
 }
 
 #[cfg(test)]
@@ -254,10 +221,13 @@ mod tests {
         };
 
         let output = render(&report, OutputFormat::Json);
+        let value: serde_json::Value =
+            serde_json::from_str(&output).expect("report must be valid JSON");
 
-        assert!(output.contains("\"chainId\": 8453"));
-        assert!(output.contains("\"ruleId\": \"test.rule\""));
-        assert!(output.contains("\"gasEstimate\": 21000"));
+        assert_eq!(value["transaction"]["chainId"], 8453);
+        assert_eq!(value["highestSeverity"], "info");
+        assert_eq!(value["findings"][0]["ruleId"], "test.rule");
+        assert_eq!(value["preflight"]["gasEstimate"], 21_000);
     }
 
     #[test]
@@ -273,10 +243,12 @@ mod tests {
         };
 
         let output = render(&report, OutputFormat::Sarif);
+        let value: serde_json::Value =
+            serde_json::from_str(&output).expect("report must be valid SARIF");
 
-        assert!(output.contains("\"version\": \"2.1.0\""));
-        assert!(output.contains("\"ruleId\": \"test.critical\""));
-        assert!(output.contains("\"level\": \"error\""));
+        assert_eq!(value["version"], "2.1.0");
+        assert_eq!(value["runs"][0]["results"][0]["ruleId"], "test.critical");
+        assert_eq!(value["runs"][0]["results"][0]["level"], "error");
     }
 
     #[test]
