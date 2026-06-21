@@ -197,4 +197,31 @@ mod tests {
         assert!(configuration.is_suspicious_contract("0X1111111111111111111111111111111111111111"));
         assert!(!configuration.is_suspicious_contract("0x2222222222222222222222222222222222222222"));
     }
+
+    #[test]
+    fn rejects_include_cycles() {
+        let directory = env::temp_dir().join(format!("evmguard-cycle-{}", std::process::id()));
+        fs::create_dir_all(&directory).expect("create configuration directory");
+        let first = directory.join("first.toml");
+        let second = directory.join("second.toml");
+        fs::write(&first, "include = [\"second.toml\"]\n").expect("write first configuration");
+        fs::write(&second, "include = [\"first.toml\"]\n").expect("write second configuration");
+
+        let error = RuleConfiguration::from_path(&first).expect_err("expect include cycle error");
+        fs::remove_dir_all(&directory).expect("remove configuration directory");
+
+        assert!(error.contains("include cycle"));
+    }
+
+    #[test]
+    fn rejects_invalid_suspicious_addresses() {
+        let path = env::temp_dir().join(format!("evmguard-invalid-{}.toml", std::process::id()));
+        fs::write(&path, "[targets]\nsuspicious = [\"0xnothex\"]\n")
+            .expect("write configuration file");
+
+        let error = RuleConfiguration::from_path(&path).expect_err("expect invalid address error");
+        fs::remove_file(&path).expect("remove configuration file");
+
+        assert!(error.contains("Invalid contract address"));
+    }
 }
