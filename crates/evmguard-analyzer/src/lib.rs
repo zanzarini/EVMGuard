@@ -13,6 +13,10 @@ const ERC20_APPROVE_SELECTOR: &str = "095ea7b3";
 const ERC20_APPROVE_LENGTH: usize = 8 + 64 + 64;
 const NFT_SET_APPROVAL_FOR_ALL_SELECTOR: &str = "a22cb465";
 const NFT_SET_APPROVAL_FOR_ALL_LENGTH: usize = 8 + 64 + 64;
+const ERC20_INCREASE_ALLOWANCE_SELECTOR: &str = "39509351";
+const ERC20_INCREASE_ALLOWANCE_LENGTH: usize = 8 + 64 + 64;
+const ERC20_PERMIT_SELECTOR: &str = "d505accf";
+const ERC20_PERMIT_LENGTH: usize = 8 + 64 * 7;
 const PRIVILEGED_ACTION_SELECTORS: [(&str, &str); 5] = [
     ("3659cfe6", "upgradeTo"),
     ("4f1ef286", "upgradeToAndCall"),
@@ -149,6 +153,14 @@ fn inspect_calldata(data: &str) -> Vec<Finding> {
         return inspect_nft_operator_approval(payload);
     }
 
+    if payload.starts_with(ERC20_INCREASE_ALLOWANCE_SELECTOR) {
+        return inspect_erc20_increase_allowance(payload);
+    }
+
+    if payload.starts_with(ERC20_PERMIT_SELECTOR) {
+        return inspect_erc20_permit(payload);
+    }
+
     for (selector, action) in PRIVILEGED_ACTION_SELECTORS {
         if payload.starts_with(selector) {
             return vec![Finding::new(
@@ -182,10 +194,7 @@ fn inspect_erc20_approval(payload: &str) -> Vec<Finding> {
         "ERC-20 approval call detected.",
     )];
 
-    if amount
-        .chars()
-        .all(|character| character == 'f' || character == 'F')
-    {
+    if grants_max_allowance(amount) {
         findings.push(Finding::new(
             "erc20.unlimited-approval",
             Severity::Critical,
@@ -194,6 +203,65 @@ fn inspect_erc20_approval(payload: &str) -> Vec<Finding> {
     }
 
     findings
+}
+
+fn inspect_erc20_increase_allowance(payload: &str) -> Vec<Finding> {
+    if payload.len() < ERC20_INCREASE_ALLOWANCE_LENGTH {
+        return vec![Finding::new(
+            "erc20.allowance-increase-malformed",
+            Severity::Warning,
+            "ERC-20 allowance increase calldata is shorter than the expected ABI encoding.",
+        )];
+    }
+
+    let added_value = &payload[72..136];
+    let mut findings = vec![Finding::new(
+        "erc20.allowance-increase",
+        Severity::Warning,
+        "ERC-20 allowance increase call detected.",
+    )];
+
+    if grants_max_allowance(added_value) {
+        findings.push(Finding::new(
+            "erc20.unlimited-approval",
+            Severity::Critical,
+            "Unlimited ERC-20 allowance increase detected.",
+        ));
+    }
+
+    findings
+}
+
+fn inspect_erc20_permit(payload: &str) -> Vec<Finding> {
+    if payload.len() < ERC20_PERMIT_LENGTH {
+        return vec![Finding::new(
+            "erc20.permit-malformed",
+            Severity::Warning,
+            "ERC-20 permit calldata is shorter than the expected ABI encoding.",
+        )];
+    }
+
+    let value = &payload[136..200];
+    let mut findings = vec![Finding::new(
+        "erc20.permit",
+        Severity::Warning,
+        "ERC-20 permit signed approval call detected.",
+    )];
+
+    if grants_max_allowance(value) {
+        findings.push(Finding::new(
+            "erc20.unlimited-approval",
+            Severity::Critical,
+            "Unlimited ERC-20 permit approval detected.",
+        ));
+    }
+
+    findings
+}
+
+fn grants_max_allowance(word: &str) -> bool {
+    word.chars()
+        .all(|character| character == 'f' || character == 'F')
 }
 
 fn inspect_nft_operator_approval(payload: &str) -> Vec<Finding> {
@@ -279,6 +347,52 @@ mod tests {
 
         assert_eq!(report.findings.len(), 1);
         assert_eq!(report.findings[0].rule_id, "erc20.approval");
+    }
+
+    #[test]
+    fn reports_unlimited_erc20_permit() {
+        let owner = "0".repeat(64);
+        let spender = "0".repeat(64);
+        let value = "f".repeat(64);
+        let remaining = "0".repeat(64 * 4);
+        let data = format!("0xd505accf{owner}{spender}{value}{remaining}");
+        let report = inspect(transaction_with_data(&data));
+
+        assert_eq!(report.highest_severity(), Severity::Critical);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == "erc20.permit"));
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == "erc20.unlimited-approval"));
+    }
+
+    #[test]
+    fn reports_regular_erc20_allowance_increase() {
+        let spender = "0".repeat(64);
+        let added_value = format!("{:064x}", 1_000);
+        let data = format!("0x39509351{spender}{added_value}");
+        let report = inspect(transaction_with_data(&data));
+
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "erc20.allowance-increase");
+        assert_eq!(report.highest_severity(), Severity::Warning);
+    }
+
+    #[test]
+    fn reports_unlimited_erc20_allowance_increase() {
+        let spender = "0".repeat(64);
+        let added_value = "f".repeat(64);
+        let data = format!("0x39509351{spender}{added_value}");
+        let report = inspect(transaction_with_data(&data));
+
+        assert_eq!(report.highest_severity(), Severity::Critical);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == "erc20.unlimited-approval"));
     }
 
     #[test]

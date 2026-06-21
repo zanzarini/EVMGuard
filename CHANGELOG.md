@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## Unreleased
+
+### Added
+
+- Detection of ERC-20 allowance increases, with an unlimited-allowance finding for maximum values.
+- Detection of ERC-20 permit signed approvals (EIP-2612), with an unlimited-allowance finding for maximum values.
+
 ## 1.1.0
 
 ### Added
