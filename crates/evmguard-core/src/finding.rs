@@ -38,6 +38,13 @@ impl Finding {
 pub struct AnalysisReport {
     pub transaction: TransactionRequest,
     pub findings: Vec<Finding>,
+    pub preflight: Option<PreflightResult>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PreflightResult {
+    pub rpc_chain_id: u64,
+    pub gas_estimate: u64,
 }
 
 impl AnalysisReport {

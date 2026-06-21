@@ -9,6 +9,7 @@
 
 ## v0.2.0
 
+- HTTP JSON-RPC preflight with chain validation and gas estimation.
 - RPC adapter for trace-capable EVM nodes.
 - Transaction execution simulation.
 - Transfer and delegate call findings.

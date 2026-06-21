@@ -16,6 +16,7 @@ EVMGuard will inspect transaction requests and execution traces to identify effe
 - Text and JSON reports.
 - Detection of ERC-20 `approve` calls.
 - Critical finding for unlimited ERC-20 approvals.
+- RPC preflight with endpoint chain ID validation and gas estimation.
 - Unit tests for inspection rules.
 
 ## Quick start
@@ -32,6 +33,22 @@ cargo run -p evmguard-cli -- inspect \
 ```
 
 Use `--format json` for automation-friendly output.
+
+## RPC preflight
+
+Run a preflight request against a standard EVM JSON-RPC endpoint before submitting a transaction:
+
+```bash
+evmguard preflight \
+  --rpc-url https://your-rpc-endpoint.example \
+  --chain-id 8453 \
+  --from 0x1111111111111111111111111111111111111111 \
+  --to 0x2222222222222222222222222222222222222222 \
+  --data 0x095ea7b3 \
+  --value 0
+```
+
+The preflight verifies the endpoint chain ID and calls `eth_estimateGas`. It does not broadcast or sign transactions.
 
 ## Roadmap
 

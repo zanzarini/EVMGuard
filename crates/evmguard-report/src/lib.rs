@@ -41,6 +41,13 @@ fn render_text(report: &AnalysisReport) -> String {
         ));
     }
 
+    if let Some(preflight) = &report.preflight {
+        output.push_str(&format!(
+            "Preflight:\n  RPC chain ID: {}\n  Gas estimate: {}\n",
+            preflight.rpc_chain_id, preflight.gas_estimate,
+        ));
+    }
+
     output
 }
 
@@ -51,16 +58,29 @@ fn render_json(report: &AnalysisReport) -> String {
         .map(render_finding_json)
         .collect::<Vec<_>>()
         .join(",\n    ");
+    let preflight = report
+        .preflight
+        .as_ref()
+        .map(render_preflight_json)
+        .unwrap_or_else(|| "null".to_owned());
 
     format!(
-        "{{\n  \"transaction\": {{\n    \"chainId\": {},\n    \"from\": \"{}\",\n    \"to\": \"{}\",\n    \"data\": \"{}\",\n    \"value\": \"{}\"\n  }},\n  \"highestSeverity\": \"{}\",\n  \"findings\": [\n    {}\n  ]\n}}\n",
+        "{{\n  \"transaction\": {{\n    \"chainId\": {},\n    \"from\": \"{}\",\n    \"to\": \"{}\",\n    \"data\": \"{}\",\n    \"value\": \"{}\"\n  }},\n  \"highestSeverity\": \"{}\",\n  \"preflight\": {},\n  \"findings\": [\n    {}\n  ]\n}}\n",
         report.transaction.chain_id,
         escape_json(&report.transaction.from),
         escape_json(&report.transaction.to),
         escape_json(&report.transaction.data),
         escape_json(&report.transaction.value),
         report.highest_severity().as_str(),
+        preflight,
         findings,
+    )
+}
+
+fn render_preflight_json(preflight: &evmguard_core::PreflightResult) -> String {
+    format!(
+        "{{\n    \"rpcChainId\": {},\n    \"gasEstimate\": {}\n  }}",
+        preflight.rpc_chain_id, preflight.gas_estimate,
     )
 }
 
@@ -85,7 +105,7 @@ fn escape_json(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{render, OutputFormat};
-    use evmguard_core::{AnalysisReport, Finding, Severity, TransactionRequest};
+    use evmguard_core::{AnalysisReport, Finding, PreflightResult, Severity, TransactionRequest};
 
     #[test]
     fn renders_json_report() {
@@ -98,11 +118,16 @@ mod tests {
                 value: "0".to_owned(),
             },
             findings: vec![Finding::new("test.rule", Severity::Info, "Test finding.")],
+            preflight: Some(PreflightResult {
+                rpc_chain_id: 8453,
+                gas_estimate: 21_000,
+            }),
         };
 
         let output = render(&report, OutputFormat::Json);
 
         assert!(output.contains("\"chainId\": 8453"));
         assert!(output.contains("\"ruleId\": \"test.rule\""));
+        assert!(output.contains("\"gasEstimate\": 21000"));
     }
 }

@@ -9,6 +9,7 @@ pub fn inspect(transaction: TransactionRequest) -> AnalysisReport {
     AnalysisReport {
         transaction,
         findings,
+        preflight: None,
     }
 }
 
