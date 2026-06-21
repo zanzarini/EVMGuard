@@ -34,6 +34,8 @@ Linux, Windows, and macOS binaries are attached to each [GitHub release](https:/
 
 ## Quick start
 
+The complete command, flag, output, and rule reference is in the [user manual](docs/usage.md).
+
 Install the stable Rust toolchain, then run:
 
 ```bash
