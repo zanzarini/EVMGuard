@@ -1,8 +1,15 @@
 use std::{error::Error, fmt, time::Duration};
 
-use evmguard_core::{CallFrame, CallType, TransactionRequest};
+use evmguard_core::{CallFrame, CallType, ProxyInfo, ProxyKind, TransactionRequest};
 use reqwest::{blocking::Client, StatusCode, Url};
 use serde_json::{json, Value};
+
+const IMPLEMENTATION_SLOT: &str =
+    "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+const ADMIN_SLOT: &str = "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103";
+const BEACON_SLOT: &str = "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50";
+const UUPS_UUID_SELECTOR: &str = "0x52d1902d";
+const BEACON_IMPLEMENTATION_SELECTOR: &str = "0x5c60da1b";
 
 #[derive(Debug)]
 pub enum RpcError {
@@ -88,6 +95,47 @@ impl RpcClient {
         parse_call_frame(&result)
     }
 
+    pub fn inspect_proxy(&self, address: &str) -> Result<ProxyInfo, RpcError> {
+        if !is_evm_address(address) {
+            return Err(RpcError::InvalidTransaction(
+                "address must be a 20-byte EVM address".to_owned(),
+            ));
+        }
+
+        let implementation = self.storage_address(address, IMPLEMENTATION_SLOT)?;
+        let admin = self.storage_address(address, ADMIN_SLOT)?;
+        let beacon = self.storage_address(address, BEACON_SLOT)?;
+        let (kind, implementation) = if let Some(beacon) = &beacon {
+            (
+                Some(ProxyKind::Beacon),
+                self.contract_address(beacon, BEACON_IMPLEMENTATION_SELECTOR)
+                    .ok(),
+            )
+        } else if let Some(implementation) = implementation {
+            let kind = if self
+                .contract_word(&implementation, UUPS_UUID_SELECTOR)
+                .map(|value| value.eq_ignore_ascii_case(IMPLEMENTATION_SLOT))
+                .unwrap_or(false)
+            {
+                ProxyKind::Uups
+            } else {
+                ProxyKind::Eip1967
+            };
+
+            (Some(kind), Some(implementation))
+        } else {
+            (None, None)
+        };
+
+        Ok(ProxyInfo {
+            address: address.to_owned(),
+            kind,
+            implementation,
+            admin,
+            beacon,
+        })
+    }
+
     fn call(&self, method: &str, params: Value) -> Result<Value, RpcError> {
         let request = json!({
             "jsonrpc": "2.0",
@@ -127,6 +175,51 @@ impl RpcClient {
             .get("result")
             .cloned()
             .ok_or_else(|| RpcError::InvalidResponse("missing result field".to_owned()))
+    }
+
+    fn storage_address(&self, address: &str, slot: &str) -> Result<Option<String>, RpcError> {
+        let result = self.call("eth_getStorageAt", json!([address, slot, "latest"]))?;
+        address_from_word(result.as_str())
+    }
+
+    fn contract_word(&self, address: &str, data: &str) -> Result<String, RpcError> {
+        let result = self.call(
+            "eth_call",
+            json!([{ "to": address, "data": data }, "latest"]),
+        )?;
+        result
+            .as_str()
+            .map(ToOwned::to_owned)
+            .ok_or_else(|| RpcError::InvalidResponse("eth_call result must be a string".to_owned()))
+    }
+
+    fn contract_address(&self, address: &str, data: &str) -> Result<String, RpcError> {
+        let result = self.contract_word(address, data)?;
+        address_from_word(Some(&result))?.ok_or_else(|| {
+            RpcError::InvalidResponse("contract returned an empty address".to_owned())
+        })
+    }
+}
+
+fn address_from_word(value: Option<&str>) -> Result<Option<String>, RpcError> {
+    let value = value.ok_or_else(|| {
+        RpcError::InvalidResponse("storage result must be a hexadecimal word".to_owned())
+    })?;
+    let word = value.strip_prefix("0x").ok_or_else(|| {
+        RpcError::InvalidResponse("storage result must be a hexadecimal word".to_owned())
+    })?;
+
+    if word.len() != 64 || !word.chars().all(|character| character.is_ascii_hexdigit()) {
+        return Err(RpcError::InvalidResponse(
+            "storage result must be a 32-byte hexadecimal word".to_owned(),
+        ));
+    }
+
+    let address = &word[24..];
+    if address.chars().all(|character| character == '0') {
+        Ok(None)
+    } else {
+        Ok(Some(format!("0x{address}")))
     }
 }
 
@@ -282,7 +375,7 @@ mod tests {
         thread,
     };
 
-    use super::{RpcClient, RpcError};
+    use super::{address_from_word, RpcClient, RpcError};
     use evmguard_core::{CallType, TransactionRequest};
     use serde_json::Value;
 
@@ -420,5 +513,26 @@ mod tests {
             .expect_err("reject invalid address");
 
         assert!(matches!(error, RpcError::InvalidTransaction(_)));
+    }
+
+    #[test]
+    fn extracts_an_address_from_a_storage_word() {
+        let value = "0x0000000000000000000000002222222222222222222222222222222222222222";
+
+        let address = address_from_word(Some(value)).expect("parse storage word");
+
+        assert_eq!(
+            address.as_deref(),
+            Some("0x2222222222222222222222222222222222222222")
+        );
+    }
+
+    #[test]
+    fn treats_a_zero_storage_word_as_an_empty_address() {
+        let value = "0x0000000000000000000000000000000000000000000000000000000000000000";
+
+        let address = address_from_word(Some(value)).expect("parse storage word");
+
+        assert_eq!(address, None);
     }
 }

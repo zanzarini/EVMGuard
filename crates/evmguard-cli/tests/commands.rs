@@ -84,6 +84,19 @@ fn trace_requires_an_rpc_endpoint() {
 }
 
 #[test]
+fn proxy_requires_an_rpc_endpoint() {
+    let output = Command::new(env!("CARGO_BIN_EXE_evmguard"))
+        .args(["proxy", "--chain-id", "8453", "--address", FROM])
+        .output()
+        .expect("run proxy command");
+
+    let stderr = String::from_utf8(output.stderr).expect("decode command error");
+
+    assert!(!output.status.success());
+    assert!(stderr.contains("--rpc-url is required."));
+}
+
+#[test]
 fn trace_reports_delegate_calls_from_a_remote_call_trace() {
     let (endpoint, handle) = trace_server();
     let output = Command::new(env!("CARGO_BIN_EXE_evmguard"))

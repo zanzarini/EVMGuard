@@ -15,6 +15,10 @@ Every finding has a stable identifier, severity, and message. Rule identifiers u
 | `trace.delegatecall` | warning | A delegate call was detected in the execution trace. |
 | `trace.internal-native-transfer` | info | An internal native asset transfer was detected. |
 | `trace.execution-reverted` | critical | An execution error was detected in the trace. |
+| `proxy.eip1967` | info | An EIP-1967 proxy was detected. |
+| `proxy.uups` | info | A UUPS proxy was detected. |
+| `proxy.beacon` | info | A beacon proxy was detected. |
+| `proxy.admin-present` | warning | A proxy upgrade administrator was detected. |
 
 ## Severity model
 

@@ -18,6 +18,7 @@ EVMGuard will inspect transaction requests and execution traces to identify effe
 - Critical finding for unlimited ERC-20 approvals.
 - RPC preflight with endpoint chain ID validation and gas estimation.
 - Call trace analysis for delegate calls, internal native transfers, and execution errors.
+- EIP-1967 proxy inspection for implementation, administrator, beacon, and UUPS metadata.
 - Unit tests for inspection rules.
 
 ## Quick start
@@ -66,6 +67,20 @@ evmguard trace \
 ```
 
 The endpoint must support the `debug_traceCall` method and the `callTracer` tracer.
+
+## Proxy inspection
+
+Inspect a contract address for EIP-1967 proxy slots:
+
+```bash
+evmguard proxy \
+  --rpc-url https://your-rpc-endpoint.example \
+  --chain-id 8453 \
+  --address 0x1111111111111111111111111111111111111111 \
+  --format json
+```
+
+The inspection reads implementation, administrator, and beacon storage slots. It identifies UUPS implementations through `proxiableUUID` when the contract exposes that method.
 
 ## Roadmap
 

@@ -1,4 +1,7 @@
-use evmguard_core::{AnalysisReport, CallFrame, CallType, Finding, Severity, TransactionRequest};
+use evmguard_core::{
+    AnalysisReport, CallFrame, CallType, Finding, ProxyInfo, ProxyKind, Severity,
+    TransactionRequest,
+};
 
 const ERC20_APPROVE_SELECTOR: &str = "095ea7b3";
 const ERC20_APPROVE_LENGTH: usize = 8 + 64 + 64;
@@ -16,6 +19,39 @@ pub fn inspect(transaction: TransactionRequest) -> AnalysisReport {
 pub fn inspect_trace(root: &CallFrame) -> Vec<Finding> {
     let mut findings = Vec::new();
     inspect_frame(root, 0, &mut findings);
+    findings
+}
+
+pub fn inspect_proxy(proxy: &ProxyInfo) -> Vec<Finding> {
+    let mut findings = Vec::new();
+
+    match &proxy.kind {
+        Some(ProxyKind::Eip1967) => findings.push(Finding::new(
+            "proxy.eip1967",
+            Severity::Info,
+            format!("EIP-1967 proxy detected at {}.", proxy.address),
+        )),
+        Some(ProxyKind::Uups) => findings.push(Finding::new(
+            "proxy.uups",
+            Severity::Info,
+            format!("UUPS proxy detected at {}.", proxy.address),
+        )),
+        Some(ProxyKind::Beacon) => findings.push(Finding::new(
+            "proxy.beacon",
+            Severity::Info,
+            format!("Beacon proxy detected at {}.", proxy.address),
+        )),
+        None => return findings,
+    }
+
+    if let Some(admin) = &proxy.admin {
+        findings.push(Finding::new(
+            "proxy.admin-present",
+            Severity::Warning,
+            format!("Proxy upgrade administrator detected at {admin}."),
+        ));
+    }
+
     findings
 }
 
@@ -121,8 +157,8 @@ fn inspect_calldata(data: &str) -> Vec<Finding> {
 
 #[cfg(test)]
 mod tests {
-    use super::{inspect, inspect_trace};
-    use evmguard_core::{CallFrame, CallType, Severity, TransactionRequest};
+    use super::{inspect, inspect_proxy, inspect_trace};
+    use evmguard_core::{CallFrame, CallType, ProxyInfo, ProxyKind, Severity, TransactionRequest};
 
     fn transaction_with_data(data: &str) -> TransactionRequest {
         TransactionRequest {
@@ -187,5 +223,23 @@ mod tests {
         assert_eq!(findings[1].rule_id, "trace.internal-native-transfer");
         assert_eq!(findings[2].rule_id, "trace.execution-reverted");
         assert_eq!(findings[2].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn reports_uups_proxy_and_administrator() {
+        let proxy = ProxyInfo {
+            address: "0x1111111111111111111111111111111111111111".to_owned(),
+            kind: Some(ProxyKind::Uups),
+            implementation: Some("0x2222222222222222222222222222222222222222".to_owned()),
+            admin: Some("0x3333333333333333333333333333333333333333".to_owned()),
+            beacon: None,
+        };
+
+        let findings = inspect_proxy(&proxy);
+
+        assert_eq!(findings.len(), 2);
+        assert_eq!(findings[0].rule_id, "proxy.uups");
+        assert_eq!(findings[1].rule_id, "proxy.admin-present");
+        assert_eq!(findings[1].severity, Severity::Warning);
     }
 }
