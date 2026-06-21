@@ -11,6 +11,7 @@ use serde::Deserialize;
 pub struct RuleConfiguration {
     disabled: BTreeSet<String>,
     severity: BTreeMap<String, Severity>,
+    suspicious_contracts: BTreeSet<String>,
 }
 
 impl RuleConfiguration {
@@ -53,6 +54,10 @@ impl RuleConfiguration {
         }
 
         configuration.disabled.extend(document.rules.disabled);
+        for address in document.targets.suspicious {
+            let normalized = normalize_address(&address)?;
+            configuration.suspicious_contracts.insert(normalized);
+        }
 
         Ok(configuration)
     }
@@ -70,9 +75,16 @@ impl RuleConfiguration {
             .collect()
     }
 
+    pub fn is_suspicious_contract(&self, address: &str) -> bool {
+        normalize_address(address)
+            .map(|address| self.suspicious_contracts.contains(&address))
+            .unwrap_or(false)
+    }
+
     fn merge(&mut self, other: Self) {
         self.disabled.extend(other.disabled);
         self.severity.extend(other.severity);
+        self.suspicious_contracts.extend(other.suspicious_contracts);
     }
 }
 
@@ -82,6 +94,8 @@ struct ConfigurationDocument {
     include: Vec<String>,
     #[serde(default)]
     rules: RulesDocument,
+    #[serde(default)]
+    targets: TargetsDocument,
 }
 
 #[derive(Default, Deserialize)]
@@ -90,6 +104,27 @@ struct RulesDocument {
     disabled: Vec<String>,
     #[serde(default)]
     severity: BTreeMap<String, String>,
+}
+
+#[derive(Default, Deserialize)]
+struct TargetsDocument {
+    #[serde(default)]
+    suspicious: Vec<String>,
+}
+
+fn normalize_address(address: &str) -> Result<String, String> {
+    let value = address
+        .strip_prefix("0x")
+        .or_else(|| address.strip_prefix("0X"))
+        .unwrap_or(address);
+
+    if value.len() != 40 || !value.chars().all(|character| character.is_ascii_hexdigit()) {
+        return Err(format!(
+            "Invalid contract address in configuration: {address}"
+        ));
+    }
+
+    Ok(format!("0x{}", value.to_ascii_lowercase()))
 }
 
 #[cfg(test)]
@@ -145,5 +180,21 @@ mod tests {
         )]);
 
         assert_eq!(findings[0].severity, Severity::Critical);
+    }
+
+    #[test]
+    fn recognizes_configured_suspicious_contracts() {
+        let path = env::temp_dir().join(format!("evmguard-targets-{}.toml", std::process::id()));
+        fs::write(
+            &path,
+            "[targets]\nsuspicious = [\"0x1111111111111111111111111111111111111111\"]\n",
+        )
+        .expect("write configuration file");
+        let configuration = RuleConfiguration::from_path(&path).expect("load configuration");
+        fs::remove_file(&path).expect("remove configuration file");
+
+        assert!(configuration.is_suspicious_contract("0x1111111111111111111111111111111111111111"));
+        assert!(configuration.is_suspicious_contract("0X1111111111111111111111111111111111111111"));
+        assert!(!configuration.is_suspicious_contract("0x2222222222222222222222222222222222222222"));
     }
 }

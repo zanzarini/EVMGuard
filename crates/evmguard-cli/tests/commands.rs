@@ -1,4 +1,5 @@
 use std::{
+    env, fs,
     io::{Read, Write},
     net::TcpListener,
     process::Command,
@@ -35,6 +36,38 @@ fn inspect_emits_a_critical_json_finding_for_unlimited_approval() {
     assert!(output.status.success());
     assert!(stdout.contains("\"highestSeverity\": \"critical\""));
     assert!(stdout.contains("\"ruleId\": \"erc20.unlimited-approval\""));
+}
+
+#[test]
+fn inspect_reports_configured_high_risk_recipient() {
+    let path = env::temp_dir().join(format!("evmguard-risk-target-{}.toml", std::process::id()));
+    fs::write(&path, format!("[targets]\nsuspicious = [\"{TO}\"]\n"))
+        .expect("write configuration file");
+    let config_path = path.to_str().expect("read configuration path");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_evmguard"))
+        .args([
+            "inspect",
+            "--chain-id",
+            "8453",
+            "--from",
+            FROM,
+            "--to",
+            TO,
+            "--data",
+            "0x12345678",
+            "--config",
+            config_path,
+            "--format",
+            "json",
+        ])
+        .output()
+        .expect("run inspect command");
+    fs::remove_file(&path).expect("remove configuration file");
+    let stdout = String::from_utf8(output.stdout).expect("decode command output");
+
+    assert!(output.status.success());
+    assert!(stdout.contains("\"ruleId\": \"transaction.suspicious-recipient\""));
 }
 
 #[test]

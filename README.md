@@ -50,9 +50,14 @@ disabled = ["transaction.unknown-selector"]
 
 [rules.severity]
 "erc20.unlimited-approval" = "warning"
+
+[targets]
+suspicious = ["0x1111111111111111111111111111111111111111"]
 ```
 
 Supported severities are `info`, `warning`, and `critical`.
+
+Addresses listed under `targets.suspicious` produce a critical finding when used as a transaction recipient. Use this list for contracts that require explicit review in your environment.
 
 Use `include = ["path/to/rules.toml"]` at the top level to load reusable rule packs. Local configuration overrides included severities.
 
