@@ -10,6 +10,7 @@ All notable changes to this project are documented in this file.
 - Detection of ERC-20 permit signed approvals (EIP-2612), with an unlimited-allowance finding for maximum values.
 - Detection of ERC-20 transfer and transferFrom calls for transaction context.
 - Detection of contract creation (CREATE and CREATE2) in execution traces.
+- Detection of Uniswap Permit2 operations: allowance approval with an unlimited uint160 finding, signed permit and permitTransferFrom calls, and transferFrom.
 
 ## 1.1.0
 
