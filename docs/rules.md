@@ -12,6 +12,9 @@ Every finding has a stable identifier, severity, and message. Rule identifiers u
 | `erc20.approval-malformed` | warning | The ERC-20 approval calldata is shorter than its expected ABI encoding. |
 | `erc20.approval` | info | An ERC-20 approval call was detected. |
 | `erc20.unlimited-approval` | critical | An ERC-20 approval grants the maximum uint256 allowance. |
+| `trace.delegatecall` | warning | A delegate call was detected in the execution trace. |
+| `trace.internal-native-transfer` | info | An internal native asset transfer was detected. |
+| `trace.execution-reverted` | critical | An execution error was detected in the trace. |
 
 ## Severity model
 

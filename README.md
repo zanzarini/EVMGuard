@@ -17,6 +17,7 @@ EVMGuard will inspect transaction requests and execution traces to identify effe
 - Detection of ERC-20 `approve` calls.
 - Critical finding for unlimited ERC-20 approvals.
 - RPC preflight with endpoint chain ID validation and gas estimation.
+- Call trace analysis for delegate calls, internal native transfers, and execution errors.
 - Unit tests for inspection rules.
 
 ## Quick start
@@ -49,6 +50,22 @@ evmguard preflight \
 ```
 
 The preflight verifies the endpoint chain ID and calls `eth_estimateGas`. It does not broadcast or sign transactions.
+
+## Call trace analysis
+
+Use a trace-capable EVM JSON-RPC endpoint to simulate a call with `debug_traceCall` and analyze its call tree:
+
+```bash
+evmguard trace \
+  --rpc-url https://your-trace-rpc-endpoint.example \
+  --chain-id 8453 \
+  --from 0x1111111111111111111111111111111111111111 \
+  --to 0x2222222222222222222222222222222222222222 \
+  --data 0x \
+  --format json
+```
+
+The endpoint must support the `debug_traceCall` method and the `callTracer` tracer.
 
 ## Roadmap
 

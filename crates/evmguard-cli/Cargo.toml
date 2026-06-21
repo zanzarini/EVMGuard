@@ -16,3 +16,6 @@ evmguard-analyzer = { path = "../evmguard-analyzer" }
 evmguard-core = { path = "../evmguard-core" }
 evmguard-report = { path = "../evmguard-report" }
 evmguard-rpc = { path = "../evmguard-rpc" }
+
+[dev-dependencies]
+serde_json = "1.0.150"
