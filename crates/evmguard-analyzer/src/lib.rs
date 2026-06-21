@@ -21,6 +21,12 @@ const ERC20_TRANSFER_SELECTOR: &str = "a9059cbb";
 const ERC20_TRANSFER_LENGTH: usize = 8 + 64 + 64;
 const ERC20_TRANSFER_FROM_SELECTOR: &str = "23b872dd";
 const ERC20_TRANSFER_FROM_LENGTH: usize = 8 + 64 * 3;
+const PERMIT2_APPROVE_SELECTOR: &str = "87517c45";
+const PERMIT2_APPROVE_LENGTH: usize = 8 + 64 * 4;
+const PERMIT2_TRANSFER_FROM_SELECTOR: &str = "36c78516";
+const PERMIT2_TRANSFER_FROM_LENGTH: usize = 8 + 64 * 4;
+const PERMIT2_PERMIT_SELECTORS: [&str; 2] = ["2b67b570", "2a2d80d1"];
+const PERMIT2_SIGNATURE_TRANSFER_SELECTORS: [&str; 2] = ["30f28b7a", "edd9444b"];
 const PRIVILEGED_ACTION_SELECTORS: [(&str, &str); 5] = [
     ("3659cfe6", "upgradeTo"),
     ("4f1ef286", "upgradeToAndCall"),
@@ -182,6 +188,36 @@ fn inspect_calldata(data: &str) -> Vec<Finding> {
         return inspect_erc20_transfer_from(payload);
     }
 
+    if payload.starts_with(PERMIT2_APPROVE_SELECTOR) {
+        return inspect_permit2_approval(payload);
+    }
+
+    if payload.starts_with(PERMIT2_TRANSFER_FROM_SELECTOR) {
+        return inspect_permit2_transfer_from(payload);
+    }
+
+    if PERMIT2_PERMIT_SELECTORS
+        .iter()
+        .any(|selector| payload.starts_with(selector))
+    {
+        return vec![Finding::new(
+            "permit2.permit",
+            Severity::Warning,
+            "Permit2 signed approval call detected.",
+        )];
+    }
+
+    if PERMIT2_SIGNATURE_TRANSFER_SELECTORS
+        .iter()
+        .any(|selector| payload.starts_with(selector))
+    {
+        return vec![Finding::new(
+            "permit2.signature-transfer",
+            Severity::Warning,
+            "Permit2 signed transfer call detected.",
+        )];
+    }
+
     for (selector, action) in PRIVILEGED_ACTION_SELECTORS {
         if payload.starts_with(selector) {
             return vec![Finding::new(
@@ -312,9 +348,61 @@ fn inspect_erc20_transfer_from(payload: &str) -> Vec<Finding> {
     )]
 }
 
+fn inspect_permit2_approval(payload: &str) -> Vec<Finding> {
+    if payload.len() < PERMIT2_APPROVE_LENGTH {
+        return vec![Finding::new(
+            "permit2.approval-malformed",
+            Severity::Warning,
+            "Permit2 approval calldata is shorter than the expected ABI encoding.",
+        )];
+    }
+
+    let amount = &payload[136..200];
+    let mut findings = vec![Finding::new(
+        "permit2.approval",
+        Severity::Warning,
+        "Permit2 approval call detected.",
+    )];
+
+    if is_max_uint160(amount) {
+        findings.push(Finding::new(
+            "permit2.unlimited-approval",
+            Severity::Critical,
+            "Unlimited Permit2 approval detected.",
+        ));
+    }
+
+    findings
+}
+
+fn inspect_permit2_transfer_from(payload: &str) -> Vec<Finding> {
+    if payload.len() < PERMIT2_TRANSFER_FROM_LENGTH {
+        return vec![Finding::new(
+            "permit2.transfer-from-malformed",
+            Severity::Warning,
+            "Permit2 transferFrom calldata is shorter than the expected ABI encoding.",
+        )];
+    }
+
+    vec![Finding::new(
+        "permit2.transfer-from",
+        Severity::Info,
+        "Permit2 transferFrom call detected.",
+    )]
+}
+
 fn grants_max_allowance(word: &str) -> bool {
     word.chars()
         .all(|character| character == 'f' || character == 'F')
+}
+
+fn is_max_uint160(word: &str) -> bool {
+    let (high, low) = word.split_at(word.len().saturating_sub(40));
+    high.chars().all(|character| character == '0')
+        && !low.is_empty()
+        && low
+            .chars()
+            .all(|character| character == 'f' || character == 'F')
 }
 
 fn inspect_nft_operator_approval(payload: &str) -> Vec<Finding> {
@@ -470,6 +558,73 @@ mod tests {
 
         assert_eq!(report.findings.len(), 1);
         assert_eq!(report.findings[0].rule_id, "erc20.transfer-from");
+    }
+
+    #[test]
+    fn reports_unlimited_permit2_approval() {
+        let token = "0".repeat(64);
+        let spender = "0".repeat(64);
+        let amount = format!("{}{}", "0".repeat(24), "f".repeat(40));
+        let expiration = "0".repeat(64);
+        let data = format!("0x87517c45{token}{spender}{amount}{expiration}");
+        let report = inspect(transaction_with_data(&data));
+
+        assert_eq!(report.highest_severity(), Severity::Critical);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == "permit2.approval"));
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == "permit2.unlimited-approval"));
+    }
+
+    #[test]
+    fn reports_regular_permit2_approval() {
+        let token = "0".repeat(64);
+        let spender = "0".repeat(64);
+        let amount = format!("{:064x}", 1_000);
+        let expiration = "0".repeat(64);
+        let data = format!("0x87517c45{token}{spender}{amount}{expiration}");
+        let report = inspect(transaction_with_data(&data));
+
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "permit2.approval");
+        assert_eq!(report.highest_severity(), Severity::Warning);
+    }
+
+    #[test]
+    fn reports_permit2_signed_permit() {
+        let single = format!("0x2b67b570{}", "0".repeat(64));
+        let batch = format!("0x2a2d80d1{}", "0".repeat(64));
+
+        for data in [single, batch] {
+            let report = inspect(transaction_with_data(&data));
+            assert_eq!(report.findings[0].rule_id, "permit2.permit");
+            assert_eq!(report.highest_severity(), Severity::Warning);
+        }
+    }
+
+    #[test]
+    fn reports_permit2_signature_transfer() {
+        let single = format!("0x30f28b7a{}", "0".repeat(64));
+        let batch = format!("0xedd9444b{}", "0".repeat(64));
+
+        for data in [single, batch] {
+            let report = inspect(transaction_with_data(&data));
+            assert_eq!(report.findings[0].rule_id, "permit2.signature-transfer");
+        }
+    }
+
+    #[test]
+    fn reports_permit2_transfer_from() {
+        let data = format!("0x36c78516{}", "0".repeat(64 * 4));
+        let report = inspect(transaction_with_data(&data));
+
+        assert_eq!(report.findings.len(), 1);
+        assert_eq!(report.findings[0].rule_id, "permit2.transfer-from");
+        assert_eq!(report.highest_severity(), Severity::Info);
     }
 
     #[test]

@@ -22,6 +22,13 @@ Every finding has a stable identifier, severity, and message. Rule identifiers u
 | `erc20.transfer` | info | An ERC-20 transfer call was detected. |
 | `erc20.transfer-from-malformed` | warning | ERC-20 transferFrom calldata is shorter than its expected ABI encoding. |
 | `erc20.transfer-from` | info | An ERC-20 transferFrom call was detected. |
+| `permit2.approval-malformed` | warning | Permit2 approval calldata is shorter than its expected ABI encoding. |
+| `permit2.approval` | warning | A Permit2 allowance approval call was detected. |
+| `permit2.unlimited-approval` | critical | A Permit2 approval grants the maximum uint160 allowance. |
+| `permit2.permit` | warning | A Permit2 signed approval (permit) call was detected. |
+| `permit2.signature-transfer` | warning | A Permit2 signed transfer (permitTransferFrom) call was detected. |
+| `permit2.transfer-from-malformed` | warning | Permit2 transferFrom calldata is shorter than its expected ABI encoding. |
+| `permit2.transfer-from` | info | A Permit2 transferFrom call was detected. |
 | `nft.operator-approval-malformed` | warning | NFT operator approval calldata is shorter than its expected ABI encoding. |
 | `nft.operator-approval` | critical | An NFT operator approval grants control over all tokens. |
 | `nft.operator-approval-revoked` | info | An NFT operator approval is being revoked. |
