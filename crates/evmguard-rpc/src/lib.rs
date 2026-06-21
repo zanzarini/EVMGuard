@@ -375,8 +375,8 @@ mod tests {
         thread,
     };
 
-    use super::{address_from_word, RpcClient, RpcError};
-    use evmguard_core::{CallType, TransactionRequest};
+    use super::{address_from_word, RpcClient, RpcError, IMPLEMENTATION_SLOT};
+    use evmguard_core::{CallType, ProxyKind, TransactionRequest};
     use serde_json::Value;
 
     fn transaction() -> TransactionRequest {
@@ -534,5 +534,150 @@ mod tests {
         let address = address_from_word(Some(value)).expect("parse storage word");
 
         assert_eq!(address, None);
+    }
+
+    fn json_result(result: &str) -> String {
+        format!(r#"{{"jsonrpc":"2.0","id":1,"result":"{result}"}}"#)
+    }
+
+    fn storage_word(address: &str) -> String {
+        format!("0x{}{}", "0".repeat(24), address)
+    }
+
+    fn multi_response_server(responses: Vec<&str>) -> (String, thread::JoinHandle<Vec<Value>>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+        let address = listener.local_addr().expect("read local address");
+        let responses: Vec<String> = responses.into_iter().map(ToOwned::to_owned).collect();
+        let handle = thread::spawn(move || {
+            responses
+                .into_iter()
+                .map(|response| {
+                    let (mut stream, _) = listener.accept().expect("accept request");
+                    let mut request = Vec::new();
+                    let mut buffer = [0_u8; 1024];
+
+                    let header_end = loop {
+                        let bytes_read = stream.read(&mut buffer).expect("read request");
+                        request.extend_from_slice(&buffer[..bytes_read]);
+
+                        if let Some(index) =
+                            request.windows(4).position(|window| window == b"\r\n\r\n")
+                        {
+                            break index + 4;
+                        }
+                    };
+
+                    let headers =
+                        String::from_utf8(request[..header_end].to_vec()).expect("decode headers");
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            name.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse::<usize>().ok())
+                                .flatten()
+                        })
+                        .expect("read content length");
+
+                    while request.len() < header_end + content_length {
+                        let bytes_read = stream.read(&mut buffer).expect("read request body");
+                        request.extend_from_slice(&buffer[..bytes_read]);
+                    }
+
+                    let body: Value =
+                        serde_json::from_slice(&request[header_end..header_end + content_length])
+                            .expect("parse request body");
+                    let http = format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                        response.len(),
+                        response,
+                    );
+
+                    stream.write_all(http.as_bytes()).expect("write response");
+
+                    body
+                })
+                .collect()
+        });
+
+        (format!("http://{address}"), handle)
+    }
+
+    #[test]
+    fn inspects_an_eip1967_proxy() {
+        let implementation = storage_word("2222222222222222222222222222222222222222");
+        let admin = storage_word("3333333333333333333333333333333333333333");
+        let zero = format!("0x{}", "0".repeat(64));
+        let r1 = json_result(&implementation);
+        let r2 = json_result(&admin);
+        let r3 = json_result(&zero);
+        let r4 = json_result(&zero);
+        let (endpoint, handle) = multi_response_server(vec![&r1, &r2, &r3, &r4]);
+        let client = RpcClient::new(&endpoint).expect("create client");
+
+        let proxy = client
+            .inspect_proxy("0x1111111111111111111111111111111111111111")
+            .expect("inspect proxy");
+        let requests = handle.join().expect("join test server");
+
+        assert_eq!(proxy.kind, Some(ProxyKind::Eip1967));
+        assert_eq!(
+            proxy.implementation.as_deref(),
+            Some("0x2222222222222222222222222222222222222222")
+        );
+        assert_eq!(
+            proxy.admin.as_deref(),
+            Some("0x3333333333333333333333333333333333333333")
+        );
+        assert_eq!(proxy.beacon, None);
+        assert_eq!(requests[0]["method"], "eth_getStorageAt");
+    }
+
+    #[test]
+    fn inspects_a_uups_proxy() {
+        let implementation = storage_word("2222222222222222222222222222222222222222");
+        let zero = format!("0x{}", "0".repeat(64));
+        let r1 = json_result(&implementation);
+        let r2 = json_result(&zero);
+        let r3 = json_result(&zero);
+        let r4 = json_result(IMPLEMENTATION_SLOT);
+        let (endpoint, handle) = multi_response_server(vec![&r1, &r2, &r3, &r4]);
+        let client = RpcClient::new(&endpoint).expect("create client");
+
+        let proxy = client
+            .inspect_proxy("0x1111111111111111111111111111111111111111")
+            .expect("inspect proxy");
+        handle.join().expect("join test server");
+
+        assert_eq!(proxy.kind, Some(ProxyKind::Uups));
+        assert_eq!(proxy.admin, None);
+    }
+
+    #[test]
+    fn inspects_a_beacon_proxy() {
+        let beacon = storage_word("4444444444444444444444444444444444444444");
+        let implementation = storage_word("2222222222222222222222222222222222222222");
+        let zero = format!("0x{}", "0".repeat(64));
+        let r1 = json_result(&zero);
+        let r2 = json_result(&zero);
+        let r3 = json_result(&beacon);
+        let r4 = json_result(&implementation);
+        let (endpoint, handle) = multi_response_server(vec![&r1, &r2, &r3, &r4]);
+        let client = RpcClient::new(&endpoint).expect("create client");
+
+        let proxy = client
+            .inspect_proxy("0x1111111111111111111111111111111111111111")
+            .expect("inspect proxy");
+        handle.join().expect("join test server");
+
+        assert_eq!(proxy.kind, Some(ProxyKind::Beacon));
+        assert_eq!(
+            proxy.beacon.as_deref(),
+            Some("0x4444444444444444444444444444444444444444")
+        );
+        assert_eq!(
+            proxy.implementation.as_deref(),
+            Some("0x2222222222222222222222222222222222222222")
+        );
     }
 }
