@@ -18,6 +18,7 @@
 
 - SARIF 2.1.0 output.
 - Manual GitHub Code Scanning workflow.
+- TOML rule configuration.
 - Rule configuration file.
 
 ## v1.0.0

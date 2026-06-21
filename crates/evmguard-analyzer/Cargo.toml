@@ -9,3 +9,5 @@ description = "Static transaction inspection rules for EVMGuard."
 
 [dependencies]
 evmguard-core = { path = "../evmguard-core" }
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.9.11"
