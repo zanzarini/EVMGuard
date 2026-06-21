@@ -17,6 +17,7 @@ EVMGuard will inspect transaction requests and execution traces to identify effe
 - Detection of ERC-20 `approve` calls.
 - Critical finding for unlimited ERC-20 approvals.
 - Critical findings for NFT operator approvals, privileged contract actions, and zero-address recipients.
+- Detection of ERC-20 allowance increases and EIP-2612 permit approvals, including unlimited-allowance findings.
 - Configurable high-risk recipient detection.
 - RPC preflight with endpoint chain ID validation and gas estimation.
 - Call trace analysis for delegate calls, internal native transfers, and execution errors.

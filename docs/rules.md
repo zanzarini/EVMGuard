@@ -13,7 +13,11 @@ Every finding has a stable identifier, severity, and message. Rule identifiers u
 | `transaction.suspicious-recipient` | critical | The transaction targets a configured high-risk contract. |
 | `erc20.approval-malformed` | warning | The ERC-20 approval calldata is shorter than its expected ABI encoding. |
 | `erc20.approval` | info | An ERC-20 approval call was detected. |
-| `erc20.unlimited-approval` | critical | An ERC-20 approval grants the maximum uint256 allowance. |
+| `erc20.unlimited-approval` | critical | An ERC-20 approval, allowance increase, or permit grants the maximum uint256 allowance. |
+| `erc20.allowance-increase-malformed` | warning | ERC-20 allowance increase calldata is shorter than its expected ABI encoding. |
+| `erc20.allowance-increase` | warning | An ERC-20 allowance increase call was detected. |
+| `erc20.permit-malformed` | warning | ERC-20 permit calldata is shorter than its expected ABI encoding. |
+| `erc20.permit` | warning | An ERC-20 permit signed approval (EIP-2612) call was detected. |
 | `nft.operator-approval-malformed` | warning | NFT operator approval calldata is shorter than its expected ABI encoding. |
 | `nft.operator-approval` | critical | An NFT operator approval grants control over all tokens. |
 | `nft.operator-approval-revoked` | info | An NFT operator approval is being revoked. |
