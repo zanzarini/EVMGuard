@@ -210,12 +210,25 @@ fn render_finding_json(finding: &Finding) -> String {
 }
 
 fn escape_json(value: &str) -> String {
-    value
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n")
-        .replace('\r', "\\r")
-        .replace('\t', "\\t")
+    let mut escaped = String::with_capacity(value.len());
+
+    for character in value.chars() {
+        match character {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            '\u{0008}' => escaped.push_str("\\b"),
+            '\u{000c}' => escaped.push_str("\\f"),
+            control if (control as u32) < 0x20 => {
+                escaped.push_str(&format!("\\u{:04x}", control as u32));
+            }
+            other => escaped.push(other),
+        }
+    }
+
+    escaped
 }
 
 #[cfg(test)]
@@ -264,5 +277,40 @@ mod tests {
         assert!(output.contains("\"version\": \"2.1.0\""));
         assert!(output.contains("\"ruleId\": \"test.critical\""));
         assert!(output.contains("\"level\": \"error\""));
+    }
+
+    #[test]
+    fn renders_valid_json_for_empty_and_control_character_inputs() {
+        let empty = AnalysisReport {
+            transaction: TransactionRequest::default(),
+            findings: Vec::new(),
+            preflight: None,
+        };
+
+        serde_json::from_str::<serde_json::Value>(&render(&empty, OutputFormat::Json))
+            .expect("empty report must produce valid JSON");
+        serde_json::from_str::<serde_json::Value>(&render(&empty, OutputFormat::Sarif))
+            .expect("empty report must produce valid SARIF");
+
+        let control = AnalysisReport {
+            transaction: TransactionRequest {
+                chain_id: 1,
+                from: "0x\u{0008}\u{0000}\u{001f}".to_owned(),
+                to: "0xto".to_owned(),
+                data: "0x".to_owned(),
+                value: "0".to_owned(),
+            },
+            findings: vec![Finding::new(
+                "test.control",
+                Severity::Info,
+                "Message with a \u{0001} control character.",
+            )],
+            preflight: None,
+        };
+
+        serde_json::from_str::<serde_json::Value>(&render(&control, OutputFormat::Json))
+            .expect("control characters must be escaped into valid JSON");
+        serde_json::from_str::<serde_json::Value>(&render(&control, OutputFormat::Sarif))
+            .expect("control characters must be escaped into valid SARIF");
     }
 }
