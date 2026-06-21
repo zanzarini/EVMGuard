@@ -27,6 +27,7 @@ Every finding has a stable identifier, severity, and message. Rule identifiers u
 | `nft.operator-approval-revoked` | info | An NFT operator approval is being revoked. |
 | `contract.privileged-action` | critical | A contract upgrade, administrator, or ownership action was detected. |
 | `trace.delegatecall` | warning | A delegate call was detected in the execution trace. |
+| `trace.contract-creation` | info | A contract creation (CREATE or CREATE2) was detected in the execution trace. |
 | `trace.internal-native-transfer` | info | An internal native asset transfer was detected. |
 | `trace.execution-reverted` | critical | An execution error was detected in the trace. |
 | `proxy.eip1967` | info | An EIP-1967 proxy was detected. |
