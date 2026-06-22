@@ -39,7 +39,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build release binary
-        run: cargo build --release -p evmguard-cli
+        run: cargo build --release -p evmguard
       - name: Package binary
         shell: bash
         run: |

@@ -90,19 +90,19 @@ Clone the repository and run the CLI through cargo:
 ```bash
 git clone https://github.com/zanzarini/EVMGuard.git
 cd EVMGuard
-cargo run -p evmguard-cli -- --help
+cargo run -p evmguard -- --help
 ```
 
-Any command shown in this manual can be run from source by replacing `evmguard` with `cargo run -p evmguard-cli --`. For example:
+Any command shown in this manual can be run from source by replacing `evmguard` with `cargo run -p evmguard --`. For example:
 
 ```bash
-cargo run -p evmguard-cli -- inspect --chain-id 1 --from 0x... --to 0x... --data 0x...
+cargo run -p evmguard -- inspect --chain-id 1 --from 0x... --to 0x... --data 0x...
 ```
 
 To produce an optimized binary:
 
 ```bash
-cargo build --release -p evmguard-cli
+cargo build --release -p evmguard
 ```
 
 The resulting binary is placed at `target/release/evmguard` (with a `.exe` extension on Windows).
@@ -115,7 +115,7 @@ The resulting binary is placed at `target/release/evmguard` (with a `.exe` exten
 | `evmguard-analyzer` | Static inspection rules |
 | `evmguard-report` | Text and JSON output rendering |
 | `evmguard-rpc` | HTTP JSON-RPC transport, preflight, call trace normalization, and proxy storage inspection |
-| `evmguard-cli` | Command-line argument parsing and orchestration |
+| `evmguard` | Command-line argument parsing and orchestration |
 
 #### Extensibility and design principles
 
@@ -921,7 +921,7 @@ The repository includes `.github/workflows/sarif.yml`, named **EVMGuard SARIF**,
 **Command run by the workflow:**
 
 ```bash
-cargo run -p evmguard-cli -- preflight \
+cargo run -p evmguard -- preflight \
   --rpc-url "${{ inputs.rpc_url }}" \
   --chain-id "${{ inputs.chain_id }}" \
   --from "${{ inputs.from }}" \
@@ -942,9 +942,9 @@ Note that the workflow runs a transaction **preflight** (an online command that 
 
 - **CI** (`.github/workflows/ci.yml`, name `CI`): triggered on push to `main` and `feature/**`, and pull requests to `main` (permissions `contents: read`). Checkout uses `actions/checkout@v7`; Rust is installed via `dtolnay/rust-toolchain@stable`. Jobs:
   - `test` ("Test Rust workspace"): installs the `clippy` and `rustfmt` components, then runs `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`.
-  - `anvil` ("Test against Anvil"): installs Foundry via `foundry-rs/foundry-toolchain@v1` (version `stable`), then runs `cargo test -p evmguard-cli --test anvil -- --ignored`.
+  - `anvil` ("Test against Anvil"): installs Foundry via `foundry-rs/foundry-toolchain@v1` (version `stable`), then runs `cargo test -p evmguard --test anvil -- --ignored`.
   - `coverage` ("Measure test coverage", `timeout-minutes: 15`): installs the `llvm-tools-preview` component and `cargo install cargo-llvm-cov --locked`, runs `cargo llvm-cov --workspace --lcov --output-path lcov.info`, and uploads the artifact via `actions/upload-artifact@v4` with name `coverage-lcov`, path `lcov.info`, and `if-no-files-found: error`.
-- **Release** (`.github/workflows/release.yml`, name `Release binaries`): triggered on release `published` or `workflow_dispatch` with a `tag` input (permissions `contents: write`). Checkout uses `actions/checkout@v7`; Rust is installed via `dtolnay/rust-toolchain@stable`. A matrix (fail-fast disabled) builds three assets (`evmguard-linux`, `evmguard-windows.exe`, `evmguard-macos`) via `cargo build --release -p evmguard-cli` and uploads them to the release with `gh release upload "$RELEASE_TAG" ... --clobber`.
+- **Release** (`.github/workflows/release.yml`, name `Release binaries`): triggered on release `published` or `workflow_dispatch` with a `tag` input (permissions `contents: write`). Checkout uses `actions/checkout@v7`; Rust is installed via `dtolnay/rust-toolchain@stable`. A matrix (fail-fast disabled) builds three assets (`evmguard-linux`, `evmguard-windows.exe`, `evmguard-macos`) via `cargo build --release -p evmguard` and uploads them to the release with `gh release upload "$RELEASE_TAG" ... --clobber`.
 
 ---
 
@@ -1025,7 +1025,7 @@ evmguard inspect \
 
 Upload `evmguard.sarif` to GitHub Code Scanning or any SARIF viewer.
 
-This is a standalone offline example and does **not** mirror the SARIF GitHub Actions workflow described in Section 11.1, which runs the online `preflight` command (`cargo run -p evmguard-cli -- preflight ... --format sarif`). If you want output that matches the CI workflow, use `preflight` with `--format sarif` instead.
+This is a standalone offline example and does **not** mirror the SARIF GitHub Actions workflow described in Section 11.1, which runs the online `preflight` command (`cargo run -p evmguard -- preflight ... --format sarif`). If you want output that matches the CI workflow, use `preflight` with `--format sarif` instead.
 
 ---
 

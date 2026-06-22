@@ -72,16 +72,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "evmguard-analyzer"
-version = "1.2.1"
-dependencies = [
- "evmguard-core",
- "serde",
- "toml",
-]
-
-[[package]]
-name = "evmguard-cli"
+name = "evmguard"
 version = "1.2.1"
 dependencies = [
  "evmguard-analyzer",
@@ -89,6 +80,15 @@ dependencies = [
  "evmguard-report",
  "evmguard-rpc",
  "serde_json",
+]
+
+[[package]]
+name = "evmguard-analyzer"
+version = "1.2.1"
+dependencies = [
+ "evmguard-core",
+ "serde",
+ "toml",
 ]
 
 [[package]]

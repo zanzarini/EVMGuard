@@ -51,7 +51,7 @@ The complete command, flag, output, and rule reference is in the [user manual](d
 Install the stable Rust toolchain, then run:
 
 ```bash
-cargo run -p evmguard-cli -- inspect \
+cargo run -p evmguard -- inspect \
   --chain-id 8453 \
   --from 0x1111111111111111111111111111111111111111 \
   --to 0x2222222222222222222222222222222222222222 \

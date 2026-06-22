@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "crates/evmguard-analyzer",
-    "crates/evmguard-cli",
+    "crates/evmguard",
     "crates/evmguard-core",
     "crates/evmguard-report",
     "crates/evmguard-rpc",
