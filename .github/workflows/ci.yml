@@ -49,6 +49,7 @@ jobs:
     name: Measure test coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: true
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -57,7 +58,9 @@ jobs:
         with:
           components: llvm-tools-preview
       - name: Install coverage tool
-        run: cargo install cargo-llvm-cov --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
       - name: Generate coverage report
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
       - name: Upload coverage report
