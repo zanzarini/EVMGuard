@@ -3,6 +3,7 @@
 [![CI](https://github.com/zanzarini/EVMGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/zanzarini/EVMGuard/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/zanzarini/EVMGuard)](https://github.com/zanzarini/EVMGuard/releases)
 [![License](https://img.shields.io/github/license/zanzarini/EVMGuard)](LICENSE)
+[![crates.io](https://img.shields.io/crates/v/evmguard)](https://crates.io/crates/evmguard)
 
 EVMGuard is an open-source command-line tool that inspects EVM transactions for dangerous effects before you sign them. It decodes calldata, simulates against a JSON-RPC endpoint, walks call traces, and classifies proxy contracts, flagging risks such as unlimited token approvals, Permit2 grants, and blanket NFT approvals. It runs locally, sends no telemetry, and emits text, JSON, or SARIF for CI.
 
@@ -40,18 +41,38 @@ EVMGuard will inspect transaction requests and execution traces to identify effe
 - Compiled rule pack interface for custom transaction, trace, and proxy checks.
 - Unit, Anvil integration, and coverage reporting workflows.
 
-## Binary releases
+## Install
 
-Linux, Windows, and macOS binaries are attached to each [GitHub release](https://github.com/zanzarini/EVMGuard/releases).
+### From crates.io
+
+```bash
+cargo install evmguard
+```
+
+This builds and installs the `evmguard` binary with the stable Rust toolchain.
+
+### Prebuilt binaries
+
+Linux, Windows, and macOS binaries are attached to each [GitHub release](https://github.com/zanzarini/EVMGuard/releases). Download the binary for your platform and run it directly, no toolchain required.
+
+### From source
+
+```bash
+git clone https://github.com/zanzarini/EVMGuard.git
+cd EVMGuard
+cargo build --release -p evmguard
+```
+
+The binary is produced at `target/release/evmguard`.
 
 ## Quick start
 
 The complete command, flag, output, and rule reference is in the [user manual](docs/usage.md).
 
-Install the stable Rust toolchain, then run:
+After installing, inspect a transaction offline (no RPC endpoint required):
 
 ```bash
-cargo run -p evmguard -- inspect \
+evmguard inspect \
   --chain-id 8453 \
   --from 0x1111111111111111111111111111111111111111 \
   --to 0x2222222222222222222222222222222222222222 \
