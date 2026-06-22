@@ -135,6 +135,11 @@ fn render_sarif(findings: &[Finding]) -> String {
     for finding in findings {
         severities
             .entry(finding.rule_id.as_str())
+            .and_modify(|severity| {
+                if finding.severity > *severity {
+                    *severity = finding.severity;
+                }
+            })
             .or_insert(finding.severity);
     }
 
@@ -284,5 +289,25 @@ mod tests {
             .expect("control characters must be escaped into valid JSON");
         serde_json::from_str::<serde_json::Value>(&render(&control, OutputFormat::Sarif))
             .expect("control characters must be escaped into valid SARIF");
+    }
+
+    #[test]
+    fn sarif_rule_level_uses_highest_severity() {
+        let report = AnalysisReport {
+            transaction: TransactionRequest::default(),
+            findings: vec![
+                Finding::new("dup.rule", Severity::Info, "First occurrence."),
+                Finding::new("dup.rule", Severity::Critical, "Second occurrence."),
+            ],
+            preflight: None,
+        };
+
+        let output = render(&report, OutputFormat::Sarif);
+        let value: serde_json::Value =
+            serde_json::from_str(&output).expect("report must be valid SARIF");
+        let rule = &value["runs"][0]["tool"]["driver"]["rules"][0];
+
+        assert_eq!(rule["id"], "dup.rule");
+        assert_eq!(rule["defaultConfiguration"]["level"], "error");
     }
 }

@@ -89,6 +89,7 @@ impl RuleConfiguration {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ConfigurationDocument {
     #[serde(default)]
     include: Vec<String>,
@@ -99,6 +100,7 @@ struct ConfigurationDocument {
 }
 
 #[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct RulesDocument {
     #[serde(default)]
     disabled: Vec<String>,
@@ -107,6 +109,7 @@ struct RulesDocument {
 }
 
 #[derive(Default, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct TargetsDocument {
     #[serde(default)]
     suspicious: Vec<String>,
@@ -223,5 +226,17 @@ mod tests {
         fs::remove_file(&path).expect("remove configuration file");
 
         assert!(error.contains("Invalid contract address"));
+    }
+
+    #[test]
+    fn rejects_unknown_configuration_keys() {
+        let path = env::temp_dir().join(format!("evmguard-unknown-{}.toml", std::process::id()));
+        fs::write(&path, "[rules.sevrity]\n\"rule.x\" = \"critical\"\n")
+            .expect("write configuration file");
+
+        let error = RuleConfiguration::from_path(&path).expect_err("expect unknown key error");
+        fs::remove_file(&path).expect("remove configuration file");
+
+        assert!(error.contains("Unable to parse configuration file"));
     }
 }
