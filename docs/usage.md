@@ -662,6 +662,9 @@ Rule identifiers use lowercase dot notation. The severity model is: **info** = o
 | `transaction.empty-calldata` | info | The calldata payload (after stripping `0x`) is empty: `Transaction contains no calldata.` |
 | `transaction.invalid-calldata` | warning | Calldata is odd-length or contains non-hex characters: `Transaction calldata is not valid hexadecimal data.` |
 | `transaction.unknown-selector` | info | Non-empty valid-hex calldata whose selector matches no known rule: `Transaction selector is not covered by the active static rule set.` |
+| `transaction.batch` | info | A batch or multicall was detected (Multicall3 aggregate/aggregate3/aggregate3Value/tryAggregate, OpenZeppelin multicall, or Gnosis Safe multiSend). Each inner call is decoded and analyzed recursively, and inner findings are labeled `Inner call N to 0x...: ...`. |
+| `transaction.batch-malformed` | warning | A batch selector was recognized but its calldata could not be decoded. |
+| `transaction.batch-depth-limit` | warning | The maximum batch nesting depth (5) was reached; deeper inner calls were not analyzed. |
 | `transaction.zero-address-recipient` | critical | Recipient is the zero address: `Transaction targets the zero address.` (Returns early; does not also emit suspicious-recipient.) |
 | `transaction.suspicious-recipient` | critical | Recipient is in the configured high-risk list: `Transaction targets a configured high-risk contract: <address>.` |
 
@@ -784,7 +787,8 @@ The first matching branch wins. Order of checks in `inspect_calldata`:
 11. `2b67b570` / `2a2d80d1` -> Permit2 permit
 12. `30f28b7a` / `edd9444b` -> Permit2 signature transfer
 13. the five privileged-action selectors -> `contract.privileged-action`
-14. fallback -> `transaction.unknown-selector`
+14. batch selectors (Multicall3, OpenZeppelin multicall, Gnosis Safe multiSend) -> `transaction.batch`, then each inner call is decoded and re-run through this same dispatch (recursively, up to a nesting depth of 5)
+15. fallback -> `transaction.unknown-selector`
 
 Recipient rules (`transaction.zero-address-recipient`, `transaction.suspicious-recipient`) are always evaluated against `--to`, independently of calldata. The trace tree (`inspect_trace`) and proxy info (`inspect_proxy`) produce the `trace.*` and `proxy.*` findings respectively.
 
@@ -1048,7 +1052,7 @@ Reports and help text on the success path are printed to **stdout**.
 
 ## 14. Limitations and Safety Notice
 
-- EVMGuard performs **static, selector-based** calldata analysis. It recognizes a fixed set of function selectors (listed in Section 8.9). Calldata whose selector is not in that set is reported as `transaction.unknown-selector` and is **not decoded**.
+- EVMGuard performs **static, selector-based** calldata analysis. It recognizes a fixed set of function selectors (listed in Section 8.9). Calldata whose selector is not in that set is reported as `transaction.unknown-selector` and is **not decoded**. Known batch and multicall wrappers are an exception: they are unwrapped and their inner calls are analyzed recursively, so a recognized action hidden inside a batch is still caught.
 - The static analyzer does not execute transactions. The `preflight`, `trace`, and `proxy` commands query an RPC endpoint but never sign or broadcast anything.
 - A finding is a signal, not a verdict. Critical findings (unlimited approvals, operator approvals, privileged actions, zero-address recipients, execution reverts) flag high-impact effects that require explicit human review.
 - EVMGuard is an analysis tool and **does not guarantee that an analyzed transaction or contract is safe.**

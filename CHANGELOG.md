@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.3.0
+
+### Added
+
+- Batch and multicall decoding. The analyzer now unwraps Multicall3 (aggregate, aggregate3, aggregate3Value, tryAggregate), OpenZeppelin multicall, and Gnosis Safe multiSend calls, recursively running the rule set on each inner call so a dangerous action hidden inside a batch is caught instead of reported as an unknown selector. Inner findings are labeled with their position and target, and a critical inner finding raises the overall severity.
+
 ## 1.2.1
 
 ### Fixed

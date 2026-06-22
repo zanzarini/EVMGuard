@@ -9,6 +9,9 @@ Every finding has a stable identifier, severity, and message. Rule identifiers u
 | `transaction.empty-calldata` | info | The transaction contains no calldata. |
 | `transaction.invalid-calldata` | warning | The calldata is not valid hexadecimal data. |
 | `transaction.unknown-selector` | info | The selector is not covered by the active static rules. |
+| `transaction.batch` | info | A batch or multicall was detected; its inner calls are analyzed recursively. |
+| `transaction.batch-malformed` | warning | A batch selector was recognized but its calldata could not be decoded. |
+| `transaction.batch-depth-limit` | warning | The maximum batch nesting depth was reached and deeper inner calls were not analyzed. |
 | `transaction.zero-address-recipient` | critical | The transaction targets the zero address. |
 | `transaction.suspicious-recipient` | critical | The transaction targets a configured high-risk contract. |
 | `erc20.approval-malformed` | warning | The ERC-20 approval calldata is shorter than its expected ABI encoding. |

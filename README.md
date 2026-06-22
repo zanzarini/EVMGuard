@@ -9,7 +9,7 @@ EVMGuard is an open-source command-line tool that inspects EVM transactions for 
 
 ## Status
 
-Version 1.2.1 is a correctness patch over 1.2.0. It makes calldata selector matching case insensitive, hardens configuration parsing and report severity, and keeps the 1.2.0 risk analysis for ERC-20 allowances, EIP-2612, Uniswap Permit2, transfers, and contract-creation traces.
+Version 1.3.0 adds batch and multicall decoding. The analyzer unwraps Multicall3, OpenZeppelin multicall, and Gnosis Safe multiSend calls and recursively analyzes each inner call, so a dangerous action hidden inside a batch is caught instead of reported as an unknown selector. It keeps the 1.2.x risk analysis for ERC-20 allowances, EIP-2612, Uniswap Permit2, transfers, and contract-creation traces, on top of case-insensitive selector matching.
 
 ## Scope
 
@@ -33,6 +33,7 @@ EVMGuard will inspect transaction requests and execution traces to identify effe
 - Detection of ERC-20 allowance increases and EIP-2612 permit approvals, including unlimited-allowance findings.
 - Detection of ERC-20 transfer and transferFrom calls for transaction context.
 - Detection of Uniswap Permit2 approvals, signed permits and transfers, including unlimited uint160 allowances.
+- Batch and multicall decoding (Multicall3, OpenZeppelin multicall, Gnosis Safe multiSend) with recursive analysis of each inner call.
 - Configurable high-risk recipient detection.
 - RPC preflight with endpoint chain ID validation and gas estimation.
 - Call trace analysis for delegate calls, internal native transfers, and execution errors.
