@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.2.1
+
+### Fixed
+
+- Calldata selector matching is now case insensitive. Uppercase or mixed-case calldata was previously mislabeled transaction.unknown-selector, so an unlimited approval encoded in uppercase hex was not flagged.
+- Maximum uint160 detection now requires a full 32-byte word, removing a latent false positive.
+- TOML configuration rejects unknown keys, so a misspelled section or rule name is reported instead of silently ignored.
+- SARIF rule severity now reflects the highest severity seen per rule id.
+- The preflight, trace, and proxy usage strings list --config, and the --rpc-url rejection message names the correct command.
+
 ## 1.2.0
 
 ### Added

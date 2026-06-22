@@ -40,3 +40,8 @@
 - Contract creation findings in execution traces.
 - Serializer-backed JSON and SARIF rendering.
 - Proxy classification and configuration error test coverage.
+
+## v1.2.1
+
+- Case-insensitive calldata selector matching.
+- Configuration parsing and report severity hardening.
