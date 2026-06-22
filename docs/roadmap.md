@@ -45,3 +45,7 @@
 
 - Case-insensitive calldata selector matching.
 - Configuration parsing and report severity hardening.
+
+## v1.3.0
+
+- Batch and multicall decoding (Multicall3, OpenZeppelin multicall, Gnosis Safe multiSend) with recursive analysis of each inner call.

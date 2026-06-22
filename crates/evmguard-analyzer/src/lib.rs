@@ -1,3 +1,4 @@
+mod batch;
 pub mod config;
 pub mod plugin;
 
@@ -9,6 +10,7 @@ use evmguard_core::{
 pub use config::RuleConfiguration;
 pub use plugin::{Rule, RuleContext, RulePack, RuleRegistry};
 
+const BATCH_DEPTH_CAP: usize = 5;
 const ERC20_APPROVE_SELECTOR: &str = "095ea7b3";
 const ERC20_APPROVE_LENGTH: usize = 8 + 64 + 64;
 const NFT_SET_APPROVAL_FOR_ALL_SELECTOR: &str = "a22cb465";
@@ -142,6 +144,10 @@ fn is_nonzero_quantity(value: &str) -> bool {
 }
 
 fn inspect_calldata(data: &str) -> Vec<Finding> {
+    inspect_calldata_at(data, 0)
+}
+
+fn inspect_calldata_at(data: &str, depth: usize) -> Vec<Finding> {
     let payload = data.strip_prefix("0x").unwrap_or(data);
 
     if payload.is_empty() {
@@ -231,11 +237,60 @@ fn inspect_calldata(data: &str) -> Vec<Finding> {
         }
     }
 
+    if let Some(kind) = batch::batch_kind(payload) {
+        return inspect_batch(kind, payload, depth);
+    }
+
     vec![Finding::new(
         "transaction.unknown-selector",
         Severity::Info,
         "Transaction selector is not covered by the active static rule set.",
     )]
+}
+
+fn inspect_batch(kind: &str, payload: &str, depth: usize) -> Vec<Finding> {
+    let calls = match batch::decode(payload) {
+        Some(calls) => calls,
+        None => {
+            return vec![Finding::new(
+                "transaction.batch-malformed",
+                Severity::Warning,
+                format!("{kind} batch calldata could not be decoded."),
+            )]
+        }
+    };
+
+    let mut findings = vec![Finding::new(
+        "transaction.batch",
+        Severity::Info,
+        format!("{kind} batch detected with {} inner call(s).", calls.len()),
+    )];
+
+    if depth >= BATCH_DEPTH_CAP {
+        findings.push(Finding::new(
+            "transaction.batch-depth-limit",
+            Severity::Warning,
+            "Maximum batch nesting depth reached; inner calls were not analyzed.",
+        ));
+        return findings;
+    }
+
+    for (index, call) in calls.iter().enumerate() {
+        let target = call
+            .target
+            .as_deref()
+            .map(|address| format!(" to {address}"))
+            .unwrap_or_default();
+        for finding in inspect_calldata_at(&call.calldata, depth + 1) {
+            findings.push(Finding::new(
+                finding.rule_id,
+                finding.severity,
+                format!("Inner call {}{}: {}", index + 1, target, finding.message),
+            ));
+        }
+    }
+
+    findings
 }
 
 fn inspect_erc20_approval(payload: &str) -> Vec<Finding> {
@@ -647,6 +702,62 @@ mod tests {
         assert_eq!(report.findings.len(), 1);
         assert_eq!(report.findings[0].rule_id, "permit2.transfer-from");
         assert_eq!(report.highest_severity(), Severity::Info);
+    }
+
+    fn batch_has(report: &evmguard_core::AnalysisReport, rule_id: &str) -> bool {
+        report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == rule_id)
+    }
+
+    #[test]
+    fn unwraps_hidden_unlimited_approval_in_multicall3_aggregate3() {
+        // Multicall3 aggregate3 batching a harmless transfer then a hidden unlimited approval.
+        let data = "0x82ad56cb00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001200000000000000000000000001111111111111111111111111111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044a9059cbb000000000000000000000000333333333333333333333333333333333333333300000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000000000000000000000000000001111111111111111111111111111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000003333333333333333333333333333333333333333ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000";
+        let report = inspect(transaction_with_data(data));
+
+        assert_eq!(report.highest_severity(), Severity::Critical);
+        assert!(batch_has(&report, "transaction.batch"));
+        assert!(batch_has(&report, "erc20.unlimited-approval"));
+    }
+
+    #[test]
+    fn unwraps_openzeppelin_multicall() {
+        // multicall(bytes[]) wrapping a setApprovalForAll grant.
+        let data = "0xac9650d80000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000044a22cb4650000000000000000000000003333333333333333333333333333333333333333000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000";
+        let report = inspect(transaction_with_data(data));
+
+        assert_eq!(report.highest_severity(), Severity::Critical);
+        assert!(batch_has(&report, "nft.operator-approval"));
+    }
+
+    #[test]
+    fn unwraps_safe_multisend() {
+        // multiSend packing a transfer then a hidden unlimited approval.
+        let data = "0x8d80ff0a0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000013200111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000044a9059cbb000000000000000000000000333333333333333333333333333333333333333300000000000000000000000000000000000000000000000000000000000003e800111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000003333333333333333333333333333333333333333ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000";
+        let report = inspect(transaction_with_data(data));
+
+        assert_eq!(report.highest_severity(), Severity::Critical);
+        assert!(batch_has(&report, "erc20.unlimited-approval"));
+    }
+
+    #[test]
+    fn recurses_into_nested_batches() {
+        // aggregate3 nested inside aggregate3 wrapping an unlimited approval.
+        let data = "0x82ad56cb000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000020000000000000000000000000111111111111111111111111111111111111111100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000014482ad56cb0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000001111111111111111111111111111111111111111000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000044095ea7b30000000000000000000000003333333333333333333333333333333333333333ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        let report = inspect(transaction_with_data(data));
+
+        assert_eq!(report.highest_severity(), Severity::Critical);
+        assert!(batch_has(&report, "erc20.unlimited-approval"));
+    }
+
+    #[test]
+    fn flags_malformed_batch() {
+        let report = inspect(transaction_with_data("0x82ad56cb00"));
+
+        assert_eq!(report.findings[0].rule_id, "transaction.batch-malformed");
+        assert_eq!(report.highest_severity(), Severity::Warning);
     }
 
     #[test]

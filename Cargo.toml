@@ -9,14 +9,14 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "1.2.1"
+version = "1.3.0"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/zanzarini/EVMGuard"
 rust-version = "1.82"
 
 [workspace.dependencies]
-evmguard-core = { path = "crates/evmguard-core", version = "1.2.1" }
-evmguard-analyzer = { path = "crates/evmguard-analyzer", version = "1.2.1" }
-evmguard-report = { path = "crates/evmguard-report", version = "1.2.1" }
-evmguard-rpc = { path = "crates/evmguard-rpc", version = "1.2.1" }
+evmguard-core = { path = "crates/evmguard-core", version = "1.3.0" }
+evmguard-analyzer = { path = "crates/evmguard-analyzer", version = "1.3.0" }
+evmguard-report = { path = "crates/evmguard-report", version = "1.3.0" }
+evmguard-rpc = { path = "crates/evmguard-rpc", version = "1.3.0" }
