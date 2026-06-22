@@ -5,7 +5,12 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Command-line interface for EVMGuard."
+description = "Open-source command-line tool to inspect EVM transactions for security risks before signing."
+homepage = "https://github.com/zanzarini/EVMGuard"
+documentation = "https://github.com/zanzarini/EVMGuard/blob/main/docs/usage.md"
+readme = "../../README.md"
+keywords = ["ethereum", "evm", "security", "web3", "blockchain"]
+categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
 
 [[bin]]
 name = "evmguard"
