@@ -844,7 +844,31 @@ Each include path is resolved relative to the directory of the current config fi
 
 ## 10. Networks and RPC Providers
 
-Any provider that supports the required methods for a command can be used. Standard HTTP and HTTPS JSON-RPC endpoints are supported (the endpoint scheme must be `http` or `https`).
+The `inspect` command is fully offline and needs no endpoint. The `preflight`, `trace`, and `proxy` commands need a JSON-RPC endpoint passed with `--rpc-url`. Any provider that supports the methods required by the command works, over `http` or `https`.
+
+### Where to get an endpoint
+
+You can use a free public endpoint (no signup) or a personal endpoint from a provider. Examples of free public endpoints, one per network:
+
+| Network | Chain ID | Example endpoint |
+| --- | --- | --- |
+| Ethereum mainnet | 1 | `https://ethereum-rpc.publicnode.com` |
+| Base | 8453 | `https://mainnet.base.org` |
+| Arbitrum One | 42161 | `https://arb1.arbitrum.io/rpc` |
+| Optimism | 10 | `https://mainnet.optimism.io` |
+| Polygon | 137 | `https://polygon-rpc.com` |
+
+Providers such as Alchemy or Infura give a personal endpoint with higher rate limits. For `trace` you need an endpoint that supports `debug_traceCall` with the `callTracer`, which most free public endpoints do not provide; a provider plan or your own node is usually required.
+
+A complete working example against a free public endpoint (inspects a real proxy contract):
+
+```bash
+evmguard proxy \
+  --rpc-url https://ethereum-rpc.publicnode.com \
+  --chain-id 1 \
+  --address 0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2 \
+  --format text
+```
 
 ### 10.1 Required RPC methods per command
 

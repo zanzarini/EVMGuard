@@ -17,10 +17,10 @@ name = "evmguard"
 path = "src/main.rs"
 
 [dependencies]
-evmguard-analyzer = { path = "../evmguard-analyzer" }
-evmguard-core = { path = "../evmguard-core" }
-evmguard-report = { path = "../evmguard-report" }
-evmguard-rpc = { path = "../evmguard-rpc" }
+evmguard-analyzer = { workspace = true }
+evmguard-core = { workspace = true }
+evmguard-report = { workspace = true }
+evmguard-rpc = { workspace = true }
 
 [dev-dependencies]
 serde_json = "1.0.150"
