@@ -84,6 +84,12 @@ Addresses listed under `targets.suspicious` produce a critical finding when used
 
 Use `include = ["path/to/rules.toml"]` at the top level to load reusable rule packs. Local configuration overrides included severities.
 
+## Choosing an RPC endpoint
+
+The `inspect` command is fully offline and needs no endpoint. The `preflight`, `trace`, and `proxy` commands need a JSON-RPC endpoint passed with `--rpc-url`.
+
+Free public endpoints (no signup) work for `preflight` and `proxy`. For example, `https://ethereum-rpc.publicnode.com` (Ethereum, chain ID 1) or `https://mainnet.base.org` (Base, chain ID 8453). Providers such as Alchemy or Infura give a personal endpoint with higher rate limits. The `trace` command needs an endpoint that supports `debug_traceCall` with the `callTracer`, which most free public endpoints do not offer.
+
 ## RPC preflight
 
 Run a preflight request against a standard EVM JSON-RPC endpoint before submitting a transaction:
