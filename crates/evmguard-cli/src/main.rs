@@ -8,9 +8,9 @@ use evmguard_report::{render, render_proxy, OutputFormat};
 use evmguard_rpc::RpcClient;
 
 const INSPECT_USAGE: &str = "Usage:\n  evmguard inspect --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--config <path>] [--format text|json|sarif]";
-const PREFLIGHT_USAGE: &str = "Usage:\n  evmguard preflight --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json|sarif]";
-const TRACE_USAGE: &str = "Usage:\n  evmguard trace --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--format text|json|sarif]";
-const PROXY_USAGE: &str = "Usage:\n  evmguard proxy --rpc-url <url> --chain-id <id> --address <address> [--format text|json|sarif]";
+const PREFLIGHT_USAGE: &str = "Usage:\n  evmguard preflight --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--config <path>] [--format text|json|sarif]";
+const TRACE_USAGE: &str = "Usage:\n  evmguard trace --rpc-url <url> --chain-id <id> --from <address> --to <address> --data <hex> [--value <value>] [--config <path>] [--format text|json|sarif]";
+const PROXY_USAGE: &str = "Usage:\n  evmguard proxy --rpc-url <url> --chain-id <id> --address <address> [--config <path>] [--format text|json|sarif]";
 
 struct ParsedArguments {
     transaction: TransactionRequest,
@@ -188,7 +188,7 @@ fn parse_arguments(
             "--config" => config_path = Some(value),
             "--rpc-url" => {
                 return Err(format!(
-                    "--rpc-url is only valid with the preflight command.\n{command_usage}"
+                    "--rpc-url is not valid for the inspect command.\n{command_usage}"
                 ));
             }
             _ => return Err(command_usage.to_owned()),

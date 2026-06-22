@@ -164,6 +164,9 @@ fn inspect_calldata(data: &str) -> Vec<Finding> {
         )];
     }
 
+    let lowercased = payload.to_ascii_lowercase();
+    let payload = lowercased.as_str();
+
     if payload.starts_with(ERC20_APPROVE_SELECTOR) {
         return inspect_erc20_approval(payload);
     }
@@ -397,10 +400,9 @@ fn grants_max_allowance(word: &str) -> bool {
 }
 
 fn is_max_uint160(word: &str) -> bool {
-    let (high, low) = word.split_at(word.len().saturating_sub(40));
-    high.chars().all(|character| character == '0')
-        && !low.is_empty()
-        && low
+    word.len() == 64
+        && word[..24].chars().all(|character| character == '0')
+        && word[24..]
             .chars()
             .all(|character| character == 'f' || character == 'F')
 }
@@ -479,6 +481,26 @@ mod tests {
         assert_eq!(report.findings.len(), 2);
         assert_eq!(report.highest_severity(), Severity::Critical);
         assert_eq!(report.findings[1].rule_id, "erc20.unlimited-approval");
+    }
+
+    #[test]
+    fn matches_selectors_case_insensitively() {
+        let data = "0x095EA7B30000000000000000000000003333333333333333333333333333333333333333FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF";
+        let report = inspect(transaction_with_data(data));
+
+        assert_eq!(report.highest_severity(), Severity::Critical);
+        assert!(report
+            .findings
+            .iter()
+            .any(|finding| finding.rule_id == "erc20.unlimited-approval"));
+    }
+
+    #[test]
+    fn requires_full_word_for_max_uint160() {
+        let max_uint160 = format!("{}{}", "0".repeat(24), "f".repeat(40));
+        assert!(super::is_max_uint160(&max_uint160));
+        assert!(!super::is_max_uint160("ffff"));
+        assert!(!super::is_max_uint160(&"f".repeat(64)));
     }
 
     #[test]
