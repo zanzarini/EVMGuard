@@ -1,6 +1,10 @@
 # EVMGuard
 
-EVMGuard is an open-source EVM transaction inspection tool for identifying security-relevant effects before a transaction is submitted.
+[![CI](https://github.com/zanzarini/EVMGuard/actions/workflows/ci.yml/badge.svg)](https://github.com/zanzarini/EVMGuard/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/zanzarini/EVMGuard)](https://github.com/zanzarini/EVMGuard/releases)
+[![License](https://img.shields.io/github/license/zanzarini/EVMGuard)](LICENSE)
+
+EVMGuard is an open-source command-line tool that inspects EVM transactions for dangerous effects before you sign them. It decodes calldata, simulates against a JSON-RPC endpoint, walks call traces, and classifies proxy contracts, flagging risks such as unlimited token approvals, Permit2 grants, and blanket NFT approvals. It runs locally, sends no telemetry, and emits text, JSON, or SARIF for CI.
 
 ## Status
 
@@ -9,6 +13,14 @@ Version 1.2.0 expands calldata risk analysis with ERC-20 allowance, EIP-2612, tr
 ## Scope
 
 EVMGuard will inspect transaction requests and execution traces to identify effects such as token approvals, asset transfers, delegate calls, and proxy usage. It does not sign transactions, broadcast transactions, manage private keys, or provide financial advice.
+
+## Why EVMGuard
+
+- Open source and auditable, under the Apache License 2.0.
+- Runs locally and sends no telemetry. Transaction data never leaves your machine.
+- Offline calldata analysis with `inspect`, no RPC endpoint required.
+- Machine-readable JSON and SARIF output that drops straight into CI and GitHub Code Scanning.
+- A single static binary for Linux, Windows, and macOS, with no runtime dependencies.
 
 ## Current capabilities
 
