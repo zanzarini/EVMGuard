@@ -44,7 +44,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Generate SARIF report
         run: >-
-          cargo run -p evmguard-cli -- preflight
+          cargo run -p evmguard -- preflight
           --rpc-url "${{ inputs.rpc_url }}"
           --chain-id "${{ inputs.chain_id }}"
           --from "${{ inputs.from }}"

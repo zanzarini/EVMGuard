@@ -15,7 +15,7 @@
 | `evmguard-analyzer` | Static inspection rules. |
 | `evmguard-report` | Text and JSON output rendering. |
 | `evmguard-rpc` | HTTP JSON-RPC transport, preflight, call trace normalization, and proxy storage inspection. |
-| `evmguard-cli` | Command-line argument parsing and orchestration. |
+| `evmguard` | Command-line argument parsing and orchestration. |
 
 ## Planned execution pipeline
 

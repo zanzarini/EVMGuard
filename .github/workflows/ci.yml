@@ -43,7 +43,7 @@ jobs:
         with:
           version: stable
       - name: Run Anvil integration test
-        run: cargo test -p evmguard-cli --test anvil -- --ignored
+        run: cargo test -p evmguard --test anvil -- --ignored
 
   coverage:
     name: Measure test coverage

@@ -1,5 +1,5 @@
 [package]
-name = "evmguard-cli"
+name = "evmguard"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
