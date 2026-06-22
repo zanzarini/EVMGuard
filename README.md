@@ -8,7 +8,7 @@ EVMGuard is an open-source command-line tool that inspects EVM transactions for 
 
 ## Status
 
-Version 1.2.0 expands calldata risk analysis with ERC-20 allowance, EIP-2612, transfer, and Uniswap Permit2 detection, adds contract-creation trace findings, and renders reports through a serializer.
+Version 1.2.1 is a correctness patch over 1.2.0. It makes calldata selector matching case insensitive, hardens configuration parsing and report severity, and keeps the 1.2.0 risk analysis for ERC-20 allowances, EIP-2612, Uniswap Permit2, transfers, and contract-creation traces.
 
 ## Scope
 
